@@ -1,0 +1,36 @@
+##########
+##SET UP##
+##########
+Do 
+
+conda activate /mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/envs/IBPG/
+
+or consult step 1~3 in https://github.com/Roy-lab/tgif/tree/main?tab=readme-ov-file#install
+
+###########
+## usage ##
+###########
+for help,
+./tetraNMF -h
+
+For the arguments following -t, 
+-t recur 
+means factorize X into AP and then factorize A into UV^T, and P into WH^T.
+-t nmqf
+means doing nmtf-style 4-factor NMF
+
+#############
+## Example ##
+#############
+./tetraNMF -d test_inputs/exp.txt \
+-r test_inputs/tfs.txt \
+-g test_inputs/targets.txt \
+-p test_inputs/prior.txt \
+-o test_inputs/out \
+-t recur \
+--k_1 8 --k_2 8 \
+--num_rep 2 \
+--max_iter 300
+
+
+## TODO support nnsvd initialization.
