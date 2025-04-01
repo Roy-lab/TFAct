@@ -1,0 +1,7 @@
+Anc2	example/in/cell_types/Anc2/E.txt
+Anc5	example/in/cell_types/Anc5/E.txt
+Calb	example/in/cell_types/Calb/E.txt
+Cgla	example/in/cell_types/Cgla/E.txt
+right	example/in/cell_types/right/E.txt
+Sbay	example/in/cell_types/Sbay/E.txt
+Spom	example/in/cell_types/Spom/E.txt

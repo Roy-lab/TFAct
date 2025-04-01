@@ -128,8 +128,6 @@ Framework::inferNMF_ct(){
 	delete evidMngr;
 	evidMngr = NULL;
 	
-	// seed = static_cast<int>(time(0));
-	seed = 1; // change this
 	verbosity=true; //change this
 	NMFLearner* nmfLearner = NULL;
 	
@@ -289,6 +287,7 @@ Framework::init(int argc, char** argv)
 	bool inputRegGraphR=false;
 	bool inputTgtGraphR=false;
 	bool inputTree=false;
+	bool seedset=false;
 
 	char gname[1025];
 	char rname[1025];
@@ -316,6 +315,7 @@ Framework::init(int argc, char** argv)
 		{"tree", required_argument, 0, 1009},
 		{"lambda_Cminus", required_argument, 0, 1010},
 		{"lambda_E", required_argument, 0, 1011},
+		{"seed", required_argument, 0, 1012},
 		{0, 0, 0, 0}
     }; 
 
@@ -530,6 +530,12 @@ Framework::init(int argc, char** argv)
 				}
 				break;
 			}
+			case 1012: // control contribution of the cell lineage (distances between cell types)
+			{
+				seed=atoi(my_optarg);
+				seedset=true;
+				break;
+			}
 			default:
 			{
 				cerr << "Unhandled option " << c  << endl;
@@ -598,12 +604,12 @@ Framework::init(int argc, char** argv)
 		cerr << "Ignoring CV" << endl;
 		CV=0;
 	}
-	if (!inputk1)
+	if ((!inputk1) && (nmft == ibpg))
 	{
 		cerr << "k_1 not provided. Set to 8." << endl;
 		k1 = 8;
 	}
-	if (!inputk2)
+	if ((!inputk2) && (nmft == ibpg))
 	{
 		cerr << "k_2 not provided. Set to 8." << endl;
 		k2 = 8;
@@ -619,6 +625,10 @@ Framework::init(int argc, char** argv)
 	}
 	if (!inputInit){
 		initMethod = nndsvd_init;
+	}
+	if (!seedset){
+		cerr << "Seed not provided. Set to 1." << endl;
+		seed = 1;
 	}
 
 	regMngr = new VariableManager;
@@ -731,24 +741,25 @@ Framework::printHelp(char* name)
 {
 	cerr << "Usage for " << name << endl;
 	cerr << left << setw(20) << "-h" << "print this message" << endl;
-	cerr << left << setw(20) << "-d" << "Input expression, tab delimited, [GeneName][\\t][val][\\t][val]... Pass a 2-column file of [celltype][\\t][path] if doing cell-type specific inference." << endl;
+	cerr << left << setw(20) << "-d" << "Input expression, tab delimited, [GeneName]\\t[val]\\t[val]... Pass a 2-column file of [celltype]\\t[path] if doing cell-type specific inference (TFAct)." << endl;
 	cerr << left << setw(20) << "-r" << "List of regulators." << endl;
 	cerr << left << setw(20) << "-g" << "List of target genes." << endl;
-	cerr << left << setw(20) << "-p" << "Prior network, [TF][\\t][TG][\\t][Confidence]. Pass a 3-column file of [celltype][\\t][path][\\t][prior quality (0~1)] if doing cell-type specific inference." << endl;
-	cerr << left << setw(20) << "-l" << "Lambda penalty, for LASSO, higher means more sparse (default 0)" << endl;
-	cerr << left << setw(20) << "-c" << "Number of cross validation folds (instead of fixed Lambda)" << endl;
-	cerr << left << setw(20) << "-o" << "Output directory. This will overwrite existing files" << endl;
-	cerr << left << setw(20) << "-t" << "type of nmf. Support recur, nmqf, ibpg, hals_prior, ibpg_2f, ibpg_2fct, KL_NMF_2fct" << endl;
-	cerr << left << setw(20) << "--k_1" << "dimension of rows of U in UV^TWH^T (default 8)" << endl;
-	cerr << left << setw(20) << "--k_2" << "dimension of rows of W in UV^TWH^T (default 8)" << endl;
-	cerr << left << setw(20) << "--num_rep" << "the # of NMF with different initializations to execute (default 1)" << endl;
+	cerr << left << setw(20) << "-p" << "Prior network, [TF]\\t[TG]\\t[Confidence]. Pass a 3-column file of [celltype]\\t[path]\\t[prior quality (0~1)] if doing cell-type specific inference." << endl;
+	cerr << left << setw(20) << "-l" << "Penalty for l1 regularization on A. Higher means imposing a heavier penalty on non prior edges (default 0)" << endl;
+	cerr << left << setw(20) << "-c" << "Number of cross validation folds (instead of fixed Lambda). Not implemented." << endl;
+	cerr << left << setw(20) << "-o" << "Output directory. This will overwrite existing files." << endl;
+	cerr << left << setw(20) << "-t" << "type of nmf. Support recur, nmqf, ibpg, hals_prior, ibpg_2f, ibpg_2fct (TFAct-F), KL_NMF_2fct (TFAct-KL)" << endl;
+	cerr << left << setw(20) << "--k_1" << "(applicable to recur, nmqf, ibpg) dimension of rows of U in UV^TWH^T (default 8)" << endl;
+	cerr << left << setw(20) << "--k_2" << "(applicable to recur, nmqf, ibpg) dimension of rows of W in UV^TWH^T (default 8)" << endl;
+	cerr << left << setw(20) << "--num_rep" << "the # of NMF with different initializations (default 1)" << endl;
 	cerr << left << setw(20) << "--max_iter" << "the # max iteration cycles to update all entries (default 300)" << endl;
-	cerr << left << setw(20) << "--randomized" << "randomly choosing blocks to update (flag. default false)" << endl;
-	cerr << left << setw(20) << "--init_m" << "initialization method. (default (Not working as expected) nndsvd)" << endl;
-	cerr << left << setw(20) << "--l_reg_graph" << "graph regularization on matrix V (tf/regulators). (default 0)" << endl;
-	cerr << left << setw(20) << "--l_tgt_graph" << "graph regularization on matrix U (genes). (default 0)" << endl;
-	cerr << left << setw(20) << "--lambda_p" << "l1 regularization on TFA matrix. (default 0)" << endl;
-	cerr << left << setw(20) << "--tree" << "3-column, tab delim cell type lineage tree. Format is child\\tparent\\tdistance" << endl;
+	cerr << left << setw(20) << "--randomized" << "randomly choosing blocks to update (flag. default false. Applicable to nmqf, ibpg only)" << endl;
+	cerr << left << setw(20) << "--init_m" << "initialization method. (default nndsvd, and should use random for TFAct)" << endl;
+	cerr << left << setw(20) << "--l_reg_graph" << "(applicable to recur, nmqf, ibpg) graph regularization on matrix V (tf/regulators). (default 0)" << endl;
+	cerr << left << setw(20) << "--l_tgt_graph" << "(applicable to recur, nmqf, ibpg) graph regularization on matrix U (genes). (default 0)" << endl;
+	cerr << left << setw(20) << "--lambda_p" << "l1 regularization on the TFA matrix. (default 0)" << endl;
+	cerr << left << setw(20) << "--tree" << "3-column, tab delim cell type lineage tree (Note that edges are distances, not similarity). Format is child\\tparent\\tdistance" << endl;
+	cerr << left << setw(20) << "--seed" << "Seed. An integer." << endl;
 	return 0;
 }
 

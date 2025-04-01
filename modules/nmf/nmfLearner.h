@@ -136,6 +136,7 @@ class NMFLearner{
             double lambdap;
             double lambda_E;
             double lambda_Cminus;
+            int npthread;
             BASENMF* bnmf;
         };
 

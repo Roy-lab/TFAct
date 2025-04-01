@@ -14,6 +14,7 @@ class KL_NMF_2FCT : public BASENMF {
 		KL_NMF_2FCT(int, init_method, int, int, bool, double);
 		~KL_NMF_2FCT();
 		int fit(map<int, gsl_matrix*>*, map<int, gsl_matrix*>*, map<int, gsl_matrix*>*, map<int, pair<gsl_matrix*, double>>*, double, map<int, map<int, double>>*, double, double, double);
+		int set_total_ncarun(int);
 
 	private:
 		double X_KL; // actually the sum of squared frobenius norm of expression matrix
@@ -41,6 +42,7 @@ class KL_NMF_2FCT : public BASENMF {
 
 		map<int, int> inneriterAs;
 		map<int, int> inneriterPs; 
+		int Nca_Runs;
 
 
 		int update_A(int); // int is cell type

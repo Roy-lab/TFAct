@@ -1,5 +1,3 @@
-# INCLUDE_PATH = ./include
-# LIBRARY_PATH = ./lib
 LFLAG = -lgsl -lgslcblas -lrt -lpthread -lgfortran
 CONDA_PREFIX = /mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/envs/IBPG
 INCLUDE_PATH = ${CONDA_PREFIX}/include

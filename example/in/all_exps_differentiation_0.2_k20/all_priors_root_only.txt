@@ -1,0 +1,7 @@
+Anc2	example/in/cell_types/right/right_prior.txt	1
+Anc5	example/in/cell_types/right/right_prior.txt	1
+Calb	example/in/cell_types/right/right_prior.txt	1
+Cgla	example/in/cell_types/right/right_prior.txt	1
+Sbay	example/in/cell_types/right/right_prior.txt	1
+Spom	example/in/cell_types/right/right_prior.txt	1
+right	example/in/cell_types/right/right_prior.txt	1

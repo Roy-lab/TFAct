@@ -1,0 +1,6 @@
+Anc2	right	1
+Anc5	right	1
+Spom	right	1
+Calb	right	1
+Cgla	right	1
+Sbay	right	1

@@ -23,11 +23,16 @@ KL_NMF_2FCT::KL_NMF_2FCT(int k, init_method initMethod, int maxIter, int seed, b
 	list<double> reconstruction_err_;
 	list<double> relative_err_;
 	list<double> cpu_time_;
+	Nca_Runs = 1;
 	epsilon = 1e-15;
 }
 
 KL_NMF_2FCT::~KL_NMF_2FCT() {};
 
+int KL_NMF_2FCT::set_total_ncarun(int ncaRuns){
+	Nca_Runs = ncaRuns;
+	return 0;
+}
 
 int KL_NMF_2FCT::record_progress(double rc_l, double relative_e, double time){
 	reconstruction_err_.push_back(rc_l);
@@ -67,6 +72,8 @@ int KL_NMF_2FCT::update_A(int ct){
         size_t tda = (*As)[ct]->tda;
         double* data = (*As)[ct]->data;
 
+		omp_set_num_threads(max(omp_get_num_procs()/Nca_Runs, 2));
+		
 		#pragma omp parallel for collapse(2)
 		for(int r = 0; r < ((*As)[ct])->size1; ++r){
 			for(int c = 0; c < n_components; ++c){
@@ -121,7 +128,9 @@ int KL_NMF_2FCT::update_P(int ct){
 	while(j < inneriterP){
 	    size_t tda = ((*Ps)[ct])->tda;
 	    double* data = ((*Ps)[ct])->data;
-		
+
+		omp_set_num_threads(max(omp_get_num_procs()/Nca_Runs, 2));
+
 		#pragma omp parallel for collapse(2)
 		for(int c = 0; c < ((*Ps)[ct])->size2; ++c){
 			for(int r = 0; r < n_components; ++r){

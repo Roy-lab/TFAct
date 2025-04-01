@@ -442,8 +442,8 @@ NMFLearner::KL_NMF2fct_helper(void* arguments)
 	double lambda_p = args->lambdap;
 	double lambda_E = args->lambda_E;
 	double lambda_Cminus = args->lambda_Cminus;
+	bnmf->set_total_ncarun(args->npthread);
 	bnmf->fit(inputmat, A, P, prior, lambda_p, cell_neighborhood, lambda_E, lambda_Cminus, lam1);
-
 	void* dummyPointer;
 	return dummyPointer;
 }
@@ -481,6 +481,7 @@ NMFLearner::inferKL_NMF2fct(map<int, gsl_matrix*>* inputmat, double lam_p,
 		args[i].lambda_E = lam_E;
 		args[i].lambda_Cminus = lam_Cminus;
 		args[i].cell_neighborhood = cell_neighborhood;
+		args[i].npthread = numNcaRep;
 
         if (pthread_create(&threads[i], NULL, KL_NMF2fct_helper, (void *) &args[i]) != 0){
 			printf("Not able to create thread\n");
