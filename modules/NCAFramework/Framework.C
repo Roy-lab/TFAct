@@ -288,6 +288,7 @@ Framework::init(int argc, char** argv)
 	bool inputTgtGraphR=false;
 	bool inputTree=false;
 	bool seedset=false;
+	bool skipheader=false;
 
 	char gname[1025];
 	char rname[1025];
@@ -316,6 +317,7 @@ Framework::init(int argc, char** argv)
 		{"lambda_Cminus", required_argument, 0, 1010},
 		{"lambda_E", required_argument, 0, 1011},
 		{"seed", required_argument, 0, 1012},
+		{"skip_header", no_argument, 0, 1013},
 		{0, 0, 0, 0}
     }; 
 
@@ -536,6 +538,11 @@ Framework::init(int argc, char** argv)
 				seedset=true;
 				break;
 			}
+			case 1013:
+			{
+				skipheader=true;
+				break;
+			}
 			default:
 			{
 				cerr << "Unhandled option " << c  << endl;
@@ -639,6 +646,10 @@ Framework::init(int argc, char** argv)
 
 	evidMngr = new EvidenceManager;
 	evidMngr->setVariableManager(tgtMngr);
+
+	if(skipheader){
+		evidMngr->skipfirstline();
+	}
 	if((nmft == ibpg_2fct) || (nmft == KL_NMF_2fct)){
 		evidMngr->loadEvidenceFromMultipleFiles_Continuous(dname);
 		{
@@ -744,7 +755,7 @@ Framework::printHelp(char* name)
 	cerr << left << setw(20) << "-d" << "Input expression, tab delimited, [GeneName]\\t[val]\\t[val]... Pass a 2-column file of [celltype]\\t[path] if doing cell-type specific inference (TFAct)." << endl;
 	cerr << left << setw(20) << "-r" << "List of regulators." << endl;
 	cerr << left << setw(20) << "-g" << "List of target genes." << endl;
-	cerr << left << setw(20) << "-p" << "Prior network, [TF]\\t[TG]\\t[Confidence]. Pass a 3-column file of [celltype]\\t[path]\\t[prior quality (0~1)] if doing cell-type specific inference." << endl;
+	cerr << left << setw(20) << "-p" << "Prior network, [TF]\\t[TG]\\t[Confidence (0~1)]. Pass a 3-column file of [celltype]\\t[path]\\t[prior quality (0~1)] if doing cell-type specific inference." << endl;
 	cerr << left << setw(20) << "-l" << "Penalty for l1 regularization on A. Higher means imposing a heavier penalty on non prior edges (default 0)" << endl;
 	cerr << left << setw(20) << "-c" << "Number of cross validation folds (instead of fixed Lambda). Not implemented." << endl;
 	cerr << left << setw(20) << "-o" << "Output directory. This will overwrite existing files." << endl;
@@ -760,6 +771,8 @@ Framework::printHelp(char* name)
 	cerr << left << setw(20) << "--lambda_p" << "l1 regularization on the TFA matrix. (default 0)" << endl;
 	cerr << left << setw(20) << "--tree" << "3-column, tab delim cell type lineage tree (Note that edges are distances, not similarity). Format is child\\tparent\\tdistance" << endl;
 	cerr << left << setw(20) << "--seed" << "Seed. An integer." << endl;
+	cerr << left << setw(20) << "--skip_header" << "skip the first line when reading the input expression (flag. default false)" << endl;
+	cerr << left << setw(20) << "--lambda_Cminus" << "l1 regularization on cells not having prior edge information (default 0)" << endl;
 	return 0;
 }
 

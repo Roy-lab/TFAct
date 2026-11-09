@@ -1,0 +1,97 @@
+library(ggplot2)
+library(parallel)
+library(tidyr)
+
+#pwd=/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data
+
+# TIGER/{{dataset}}/{{c}}_stability/{{gs}}/stats_{{top_e}}/AUPR.txt", outdir=config["outdir"]),
+indir="TFA_output"
+max_cores=10
+
+formal_algo_names <- function(dat, column_name){
+    dat[[column_name]][dat[[column_name]] == "ibpg"] <- "IBPG-p"
+    dat[[column_name]][dat[[column_name]] == "ibpg_2fct"] <- "TFAct-F_500_100"
+    dat[[column_name]][dat[[column_name]] == "ibpg_2fct_500_1000"] <- "TFAct-F_500_1000"
+    dat[[column_name]][dat[[column_name]] == "ibpg_2fct_500_0"] <- "TFAct-F_500_0"
+    dat[[column_name]][dat[[column_name]] == "ibpg_2fct_2000_100"] <- "TFAct-F_2000_100"
+    dat[[column_name]][dat[[column_name]] == "ibpg_2fct_2000_1000"] <- "TFAct-F_2000_1000"
+    dat[[column_name]][dat[[column_name]] == "ibpg_2fct_100_1000"] <- "TFAct-F_100_1000"
+    dat[[column_name]][dat[[column_name]] == "kl_nmf_2fct"] <- "TFAct-KL_500_100"
+    dat[[column_name]][dat[[column_name]] == "kl_nmf_2fct_2000_1000"] <- "TFAct-KL_2000_1000"
+    return(dat)
+}
+
+datasets = c('processed_FBS_reprogramming', 'processed_Buenrostro_Hematopoiesis', 'processed_Ranzoni_fetal_hematopoiesis_fine_tree')
+# algos=c('kl_nmf_2fct','kl_nmf_2fct_2000_1000','HALS-p', 'ibpg', 'NINCA_quad', 'TIGER', 'NetREX_CF', 'supirfactor_shallow', 'supirfactor_hierarchical', 'ibpg_2fct', 'ibpg_2fct_2000_1000', 'ibpg_2fct_2000_100', 'ibpg_2fct_100_1000', 'regularized_nca')
+algos=c('NINCA_quad', 'TIGER', 'NetREX_CF', 'supirfactor_shallow', 'supirfactor_hierarchical', 'ibpg_2fct', 'ibpg_2fct_2000_1000', 'ibpg_2fct_2000_100', 'ibpg_2fct_100_1000', 'regularized_nca')
+
+
+mouse_gold_standards = c('mESC_chipunion_KDUnion_intersect', 'mESC_KDUnion', 'mESC_chipunion')
+
+human_gold_standards = c('Cus_KO_0.01_Cus_ChIP_2_intersect.gs_network', 'Cus_ChIP_2.gs_network', 'Cus_KO_0.01.gs_network', 'Cus_KO_0.01_union_intersect.gs_network', 'UniBind.gs_network')
+
+# FBS reprogramming
+FBS_clusters = c("cluster1","cluster2","cluster3","cluster4","cluster5","cluster7","cluster8")
+
+# Buenrostro_Hematopoiesis 
+BH_clusters = c("cluster1","cluster2","cluster3","cluster6","cluster7","cluster8", "cluster9", "cluster10")
+
+# Ranzoni_fetal_hematopoiesis/coarse_tree
+RFH_fine_clusters = c("B-cells","Erythroid-cells","GPs","Granulocytes","HSC-MPPs","LMPs","Mast-cells","Megakaryocytes","MEMPs","Monocytes","pDCs")
+
+cluster_lst = list(FBS_clusters, BH_clusters, RFH_fine_clusters)
+names(cluster_lst) <- datasets
+gs_lst = list(mouse_gold_standards, human_gold_standards, human_gold_standards)
+names(gs_lst) <- datasets
+
+system(paste0('mkdir -p ',indir,'/analysis/AUPR_TF'))
+
+for(d in datasets){
+    clusters <- cluster_lst[[d]]
+    gold_standards <- gs_lst[[d]]
+zx    mclapply(gold_standards, function(g){
+        cur_mat <- matrix(0, length(clusters), length(algos))
+        cur_mat_mean <- matrix(0, length(clusters), length(algos))
+        for(c in 1:length(clusters)){
+            for(a in 1:length(algos)){
+                cur_f <- paste0(indir,"/",algos[[a]], '/',d,'/',clusters[[c]],'_stability/', g,'/stats_10000/AUPR_TF.txt')
+                cur_f <- read.table(cur_f,sep='\t', header=FALSE) 
+                cur_mat[c, a] = median(cur_f$V2)
+                cur_mat_mean[c, a] = mean(cur_f$V2)
+            }
+        }
+        cur_mat <- as.data.frame(cur_mat)
+        rownames(cur_mat) <- clusters
+        colnames(cur_mat) <- algos
+        cur_mat$cell = rownames(cur_mat)
+        df <- pivot_longer(cur_mat, cols = -cell, names_to = "algorithm", values_to = "AUPR")
+        df$AUPR <- as.numeric(df$AUPR)
+        df <- formal_algo_names(df, "algorithm")
+        ggplot(df, aes(x = cell, y = algorithm, fill = AUPR)) +
+            geom_tile(color = "white") +  # White borders around tiles
+            scale_fill_gradient(low = "white", high = "blue", limits = c(0, 1)) +  # Set max to 1
+            geom_text(aes(label = round(AUPR, 2)), color = "black", size = 3) +  # Add numbers
+            labs(title = "", x = "", y = "", fill = "medianAUPR") +
+            theme_minimal()  +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1), text = element_text(face="bold", size = 9),
+          panel.spacing = unit(0, "lines"))  
+        ggsave(paste0(indir,'/analysis/AUPR_TF/median_',d,'_',g,'.png'), width = 6, height = length(unique(df$algorithm)) * 0.3)
+        cur_mat_mean <- as.data.frame(cur_mat_mean)
+        rownames(cur_mat_mean) <- clusters
+        colnames(cur_mat_mean) <- algos
+        cur_mat_mean$cell = rownames(cur_mat_mean)
+        df <- pivot_longer(cur_mat_mean, cols = -cell, names_to = "algorithm", values_to = "AUPR")
+        df$AUPR <- as.numeric(df$AUPR)
+        df <- formal_algo_names(df, "algorithm")
+        ggplot(df, aes(x = cell, y = algorithm, fill = AUPR)) +
+            geom_tile(color = "white") +  # White borders around tiles
+            scale_fill_gradient(low = "white", high = "blue", limits = c(0, 1)) +  # Set max to 1
+            geom_text(aes(label = round(AUPR, 2)), color = "black", size = 3) +  # Add numbers
+            labs(title = "", x = "", y = "", fill = "meanAUPR") +
+            theme_minimal()  +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1), text = element_text(face="bold", size = 9),
+          panel.spacing = unit(0, "lines"))  
+        ggsave(paste0(indir,'/analysis/AUPR_TF/mean_',d,'_',g,'.png'), width = 6, height = length(unique(df$algorithm)) * 0.3)
+
+    }, mc.cores=max_cores)
+}

@@ -12,6 +12,7 @@ EvidenceManager::EvidenceManager()
 {
 	vMgr = NULL;
 	dataMat = NULL;
+	skip_firstline = false;
 }
 
 EvidenceManager::~EvidenceManager()
@@ -45,11 +46,20 @@ EvidenceManager::removeVarsByID(vector<int>& ids)
 	return 0;
 }
 
+void
+EvidenceManager::skipfirstline()
+{
+	skip_firstline = true;
+}
+
 int
 EvidenceManager::readExpFromFile(const char* inname, map<string,vector<double>* >& expMap)
 {
 	ifstream inFile(inname);
 	char buffer[500001];
+	if(skip_firstline){
+		inFile.getline(buffer,500000);
+	}
 	while(inFile.good())
 	{
 		inFile.getline(buffer,500000);
@@ -135,6 +145,9 @@ EvidenceManager::loadEvidenceFromMultipleFiles_Continuous_helper(const string& c
 {
 	ifstream inFile(inname);
 	char buffer[500001];
+	if(skip_firstline){
+		inFile.getline(buffer,500000);
+	}
 	while(inFile.good())
 	{
 		inFile.getline(buffer,500000);

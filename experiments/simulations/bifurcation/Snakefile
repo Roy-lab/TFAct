@@ -1,0 +1,501 @@
+configfile:"config.yml"
+
+import numpy as np
+import glob
+import os
+
+prefixes=["Calb", "Cgla", "Klac", "Sbay", "Scer", "Sjap", "Spom"]
+lda_k=['k10','k20']
+edge_adding_prob=[0.1, 0.2]
+TFA_sim_rep=['rep0'] 
+exp_mat_w_dropout=['E'] # without .txt
+num_random_init=20
+
+top_edges=[500, 1000, 2000] # for f scores 
+
+# algos need to be specified to calculate Fscores
+algos=['kl_nmf_2fct', 'baselines/hals_prior', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg', 'FastNCA', 'NINCA_quad', 'pmf_grn', 'regularized_nca', 'BITFAM', 'TIGER', 'NetREX_CF', 'supirfactor_shallow', 'supirfactor_hierarchical', 'ibpg_2f', 'ibpg_2fct']
+stability_algos=['kl_nmf_2fct', 'ibpg_2f', 'ibpg_2fct', 'baselines/hals_prior', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg'] # a subset
+
+# the below may add up to stability_algos
+gene_by_tf_A_algos=['kl_nmf_2fct', 'ibpg_2f', 'ibpg_2fct', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg', 'FastNCA', 'NINCA_quad', 'pmf_grn'] # algorithms that infer a gene-by-tf GRN matrix
+tf_by_gene_A_algos=['baselines/hals_prior'] # algorithms that infer a tf-by-gene GRN matrix
+edge_lst_A_algos=['regularized_nca'] # return a 3 column edge file
+
+include: "rules/pmf_grn.smk" # included here such that variables defined above will be accessible
+include: "rules/FastNCA.smk" 
+include: "rules/NINCA.smk" 
+include: "rules/regularized_nca.smk"
+include: "rules/BITFAM.smk"
+include: "rules/TIGER.smk"
+include: "rules/NetREX_CF.smk"
+include: "rules/supirfactor.smk"
+include: "rules/IBPG_2FCT.smk"
+include: "rules/KL_NMF_2fct.smk"
+
+rule all:
+    input:
+        ####
+        # Part 1: Running algorithms
+        ####
+        # regularized nca
+        expand("{outdir}/regularized_nca/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/{stability_rep}/adj.txt", outdir=config["outdir"], \
+            edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, stability_rep = ["rep_"+str(_) for _ in range(num_random_init)]),
+        expand("{outdir}/regularized_nca/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/adj_filelist.txt", outdir=config["outdir"], \
+            edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        expand("{outdir}/regularized_nca/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/P.txt", outdir=config["outdir"], \
+            edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # 2 factor hals with prior
+        expand("{outdir}/baselines/hals_prior/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # 2 factor ibpg, cell type specific
+        expand("{outdir}/ibpg_2fct/{edgeprob}/{ldak}/all_cell_results/{TFAsimrep}/{exp}/rep_0/{pre}/A.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # ibpg + graph regularization + prior on ||Penalty \circ UV^T||_1
+        expand("{outdir}/ibpg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # ibpg + prior on ||Penalty \circ UV^T||_1
+        expand("{outdir}/ibpg_wogr/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # ibpg without regularization
+        expand("{outdir}/ibpg_noreg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # nmqf + prior on ||Penalty \circ UV^T||_1
+        expand("{outdir}/nmqf_hals/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # nmqf without regularization
+        expand("{outdir}/nmqf_hals_noreg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        ### existing algorithms, start
+        # 1. pmf_grn
+        # here obtain the best hyperparamters
+        expand("{outdir}/pmf_grn/experiments/hpsearch/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/{fold_num}/hyperparams_used.txt", \
+            outdir=config["outdir"],edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, \
+            fold_num=[_ for _ in range(config["algo"]["pmf_grn"]["num_experiments"])]),
+
+        expand("{outdir}/pmf_grn/experiments/hpsearch/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/hp_results.txt", outdir=config["outdir"],\
+            edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        # full prior run
+        expand("{outdir}/pmf_grn/experiments/full_prior/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/best_iter.params", outdir=config["outdir"],\
+            edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        
+        # consensus
+        expand("{outdir}/pmf_grn/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/inferred_consensus_tfa.tsv", outdir=config["outdir"],\
+            edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # 2. FastNCA
+        expand("{outdir}/FastNCA/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/A.txt", outdir=config["outdir"], \
+            edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        
+        # 3. NINCA_lp, NINCA_quad
+        expand("{outdir}/NINCA_quad/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/A.txt", outdir=config["outdir"],\
+            edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        # expand("{outdir}/NINCA_lp/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/A.txt", outdir=config["outdir"],\
+        #     edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # 4. BITFAM
+        expand("{outdir}/BITFAM/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/A.txt", outdir=config["outdir"],\
+            edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        ### END existing algorithms
+
+        ###
+        # stability selection for all algorithms
+        ###
+        expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/A.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, algo=stability_algos),
+
+        ####
+        # Part 2: Analysis
+        ####
+        expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/stats_{top_e}/tf_specifics.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, top_e=top_edges, algo=algos),
+        # expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/stats_{top_e}/tf_specifics.txt", outdir=config["outdir"], \
+        # edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, top_e=top_edges, algo=gene_by_tf_A_algos),
+        # expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/stats_{top_e}/tf_specifics.txt", outdir=config["outdir"], \
+        # edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, top_e=top_edges, algo=edge_lst_A_algos),
+
+        # Fscores
+        expand("{outdir}/analysis/Fscores.txt", outdir=config["outdir"] ),
+
+        # clustering accurarcy and related stats
+        expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/downstream_analysis/clust_stats.txt", outdir=config["outdir"], \
+        edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, top_e=top_edges, algo=stability_algos),
+        expand("{outdir}/analysis/clustering_stats.txt", outdir=config["outdir"])
+
+        
+#####
+## Step 1: run all algorithms
+#####
+
+rule run_hals_prior_TFA_inference:
+    input:
+        r = config["tflist"],
+        d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+        g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+        p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/baselines/hals_prior/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/baselines/hals_prior/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/baselines/hals_prior/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/baselines/hals_prior/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/hals_prior/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][hals_prior][max_iter]} --init_m {config[algo][hals_prior][init_m]} \
+        --num_rep {params.num_rep} -t hals_prior -l {config[algo][hals_prior][l]}
+        """
+
+rule run_ibpg_2f_TFA_inference:
+    input:
+        r = config["tflist"],
+        d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+        g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+        p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/ibpg_2f/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/ibpg_2f/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/ibpg_2f/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/ibpg_2f/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/ibpg_2f/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][ibpg_2f][max_iter]} --init_m {config[algo][ibpg_2f][init_m]} \
+        --num_rep {params.num_rep} -t ibpg_2f -l {config[algo][ibpg_2f][l]} --lambda_p {config[algo][ibpg_2f][lambda_p]}
+        """
+
+rule run_ibpg_TFA_inference:
+    input:
+        r = config["tflist"],
+        d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+        g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+        p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/ibpg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/ibpg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/ibpg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/ibpg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/ibpg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][ibpg][max_iter]} --init_m {config[algo][ibpg][init_m]} \
+        --num_rep {params.num_rep} -t ibpg -l {config[algo][ibpg][l]} \
+        --k_1 {config[algo][ibpg][k_1]} --k_2 {config[algo][ibpg][k_2]} \
+        --l_reg_graph {config[algo][ibpg][l_reg_graph]} --l_tgt_graph {config[algo][ibpg][l_tgt_graph]}
+        """
+
+rule run_ibpg_wogr_TFA_inference: # without graph regularization
+    input:
+        r = config["tflist"],
+        d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+        g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+        p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/ibpg_wogr/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/ibpg_wogr/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/ibpg_wogr/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/ibpg_wogr/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/ibpg_wogr/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][ibpg][max_iter]} --init_m {config[algo][ibpg][init_m]} \
+        --num_rep {params.num_rep} -t ibpg -l {config[algo][ibpg][l]} \
+        --k_1 {config[algo][ibpg][k_1]} --k_2 {config[algo][ibpg][k_2]} \
+        --l_reg_graph 0 --l_tgt_graph 0
+        """
+
+rule run_ibpg_noreg_inference:
+    input:
+        r = config["tflist"],
+        d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+        g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+        p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/ibpg_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/ibpg_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/ibpg_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/ibpg_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/ibpg_noreg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][ibpg][max_iter]} --init_m {config[algo][ibpg][init_m]} \
+        --num_rep {params.num_rep} -t ibpg -l 0 \
+        --k_1 {config[algo][ibpg][k_1]} --k_2 {config[algo][ibpg][k_2]} \
+        --l_reg_graph 0 --l_tgt_graph 0
+        """
+
+
+
+rule run_nmqf_hals_TFA_inference: # nmqf with hals update rule with prior on ||Prior \circ UV^T||_1. Note that graph reg not applicable for nonseparability
+    input:
+        r = config["tflist"],
+        d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+        g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+        p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/nmqf_hals/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/nmqf_hals/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/nmqf_hals/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/nmqf_hals/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/nmqf_hals/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][nmqf_hals][max_iter]} --init_m {config[algo][nmqf_hals][init_m]} \
+        --num_rep {params.num_rep} -t nmqf -l {config[algo][nmqf_hals][l]} \
+        --k_1 {config[algo][nmqf_hals][k_1]} --k_2 {config[algo][nmqf_hals][k_2]} \
+        --l_reg_graph 0 --l_tgt_graph 0
+        """
+
+rule run_nmqf_hals_noreg_TFA_inference: # nmqf with hals update rule with prior on ||Prior \circ UV^T||_1. Note that graph reg not applicable for nonseparability
+    input:
+        r = config["tflist"],
+        d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+        g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+        p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/nmqf_hals_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/nmqf_hals_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/nmqf_hals_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/nmqf_hals_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/nmqf_hals_noreg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][nmqf_hals][max_iter]} --init_m {config[algo][nmqf_hals][init_m]} \
+        --num_rep {params.num_rep} -t nmqf -l 0 \
+        --k_1 {config[algo][nmqf_hals][k_1]} --k_2 {config[algo][nmqf_hals][k_2]} \
+        --l_reg_graph 0 --l_tgt_graph 0
+        """
+
+######
+## Step 2: stability selection
+######
+rule stability_selection_get_mean:
+    input:
+        rel=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        in_A=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+        in_P=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"])
+    output:
+        out_A=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/P.txt", outdir=config["outdir"])
+    params:
+        indir_suffix="{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}",
+        output_precision = 7,
+        file_pattern_A = "rep_*/A.txt",
+        file_pattern_P = "rep_*/P.txt",
+        frac_ignored= 0.25
+    shell:
+        """
+        python {config[scriptdir]}/get_stability_selection_mean.py --A_file_pattern '{config[outdir]}/{params.indir_suffix}/{params.file_pattern_A}' \
+        --P_file_pattern '{config[outdir]}/{params.indir_suffix}/{params.file_pattern_P}' --frac_ignored {params.frac_ignored} \
+        --output_precision {params.output_precision} --out_A {output.out_A} --out_P {output.out_P}
+        """
+
+######
+## Step 3: validate 
+######
+# rule hals_prior_get_summary_stat:
+#     input:
+#         A=expand("{outdir}/baselines/hals_prior/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/A.txt", outdir=config["outdir"]),
+#         P=expand("{outdir}/baselines/hals_prior/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/P.txt", outdir=config["outdir"]),
+#         prior=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+#         true_P=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/P.txt", datadir=config["datadir"]),
+#         g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+#     output:
+#         A=expand("{outdir}/baselines/hals_prior/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/stats_{{top_e}}/tf_specifics.txt", outdir=config["outdir"]),
+#         P=expand("{outdir}/baselines/hals_prior/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/stats_{{top_e}}/stat.txt", outdir=config["outdir"])
+#     conda:
+#         "/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/.conda/envs/scanpy" # change this
+#     params:
+#         outdir=expand("{outdir}/baselines/hals_prior/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/stats_{{top_e}}", outdir=config["outdir"])
+#     shell:
+#         """
+#         python {config[scriptdir]}/compare_networks_and_TFA.py \
+#         --outdir {params.outdir} \
+#         --inferred_A {input.A}  \
+#         --inferred_P {input.P} \
+#         --true_A {config[genedir]}/{wildcards.edgeprob}/{wildcards.pre}/nw.tsv \
+#         --prior_A {input.prior} \
+#         --true_P {input.true_P} \
+#         --tf_lst {config[tflist]} \
+#         --gene {input.g} \
+#         --top {wildcards.top_e}
+#         """
+
+rule algo_get_summary_stat:
+    input:
+        A=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/A.txt", outdir=config["outdir"]),
+        P=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/P.txt", outdir=config["outdir"]),
+        prior=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+        true_P=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/P.txt", datadir=config["datadir"]),
+        g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+    output:
+        expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/stats_{{top_e}}/tf_specifics.txt", outdir=config["outdir"]),
+        expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/stats_{{top_e}}/stat.txt", outdir=config["outdir"])
+    conda:
+        "/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/.conda/envs/scanpy" # change this
+    params:
+        outdir=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/stats_{{top_e}}", outdir=config["outdir"]),
+        tf_by_gene=lambda wildcards: ' '.join(f"'{_}'" for _ in tf_by_gene_A_algos),
+        gene_by_tf=lambda wildcards: ' '.join(f"'{_}'" for _ in gene_by_tf_A_algos)
+    shell: # TODO pmf grn not scaled, as tfa depends on sequencing depth
+        """
+        tf_by_gene=( {params.tf_by_gene} )
+        gene_by_tf=( {params.gene_by_tf} )
+        if [[ " ${{gene_by_tf[*]}} " =~ [[:space:]]{wildcards.algo}[[:space:]] ]]; then
+            python {config[scriptdir]}/compare_networks_and_TFA.py \
+            --outdir {params.outdir} \
+            --inferred_A {input.A}  \
+            --inferred_P {input.P} \
+            --true_A {config[genedir]}/{wildcards.edgeprob}/{wildcards.pre}/nw.tsv \
+            --prior_A {input.prior} \
+            --true_P {input.true_P} \
+            --tf_lst {config[tflist]} \
+            --gene {input.g} \
+            --top {wildcards.top_e} \
+            --transpose_inferred_A
+        elif [[ " ${{tf_by_gene[*]}} " =~ [[:space:]]{wildcards.algo}[[:space:]] ]]; then
+            python {config[scriptdir]}/compare_networks_and_TFA.py \
+            --outdir {params.outdir} \
+            --inferred_A {input.A}  \
+            --inferred_P {input.P} \
+            --true_A {config[genedir]}/{wildcards.edgeprob}/{wildcards.pre}/nw.tsv \
+            --prior_A {input.prior} \
+            --true_P {input.true_P} \
+            --tf_lst {config[tflist]} \
+            --gene {input.g} \
+            --top {wildcards.top_e}
+        else # edge list
+            python {config[scriptdir]}/compare_networks_and_TFA.py \
+            --outdir {params.outdir} \
+            --inferred_A {input.A}  \
+            --inferred_P {input.P} \
+            --true_A {config[genedir]}/{wildcards.edgeprob}/{wildcards.pre}/nw.tsv \
+            --prior_A {input.prior} \
+            --true_P {input.true_P} \
+            --tf_lst {config[tflist]} \
+            --gene {input.g} \
+            --top {wildcards.top_e} \
+            --A_edge_lst
+        fi
+        """
+
+
+rule collect_F_scores:
+    input:
+        expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/stats_{top_e}/stat.txt", outdir=config["outdir"], \
+        algo=algos, edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, top_e=top_edges)
+    output:
+        expand("{outdir}/analysis/Fscores.txt", outdir=config["outdir"])
+    params:
+        stat_path=[config["outdir"]+ '/'+alg + '/*/*/*/*/*/stats_*/stat.txt' for alg in algos]
+    shell: # note: modify below to include more algorithms
+        """
+        awk 'BEGIN{{OFS="\\t"}}NR==1{{$1=$1; printf "file_name\\t%s\\n", $0}}FNR==2{{printf "%s\\t",  FILENAME}} FNR>1{{print}}' {params.stat_path} | \
+        awk -F'\\t' -v regex_pattern='{config[outdir]}/([^/]+|baselines/[^/]+)/(0.[0-9]+)/(k[0-9]+)/([^/]+)/(rep[0-9]+)/([^/]+)_stability/stats_([0-9]+)'  'BEGIN{{OFS="\\t"}} NR==1{{printf "algo\\tedge_addition_prob\\tlda_topics\\tcell\\tTFA_rep\\texp_dropout\\tFscore_top_edge\\t"; 
+            for (i=2; i<NF; i++) printf $i "\\t"; print $NF }}NR>1{{
+            $1=$1; 
+            match($1, regex_pattern, arr);
+            printf "%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t", arr[1], arr[2], arr[3], arr[4], arr[5], arr[6], arr[7];
+            for (i=2; i<NF; i++) printf $i "\\t"; print $NF 
+        }}' > {output}
+        """
+
+# TODO: incorporate graph property analysis (clusterability)
+
+rule stability_get_clustering_accurarcy:
+    input: 
+        P=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/P.txt", outdir=config["outdir"]),
+        gt_celltype=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/cell_celltype_assignments.txt", datadir=config["datadir"]),
+    output:
+        outstat=expand("{outdir}/{{algo}}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/downstream_analysis/clust_stats.txt", outdir=config["outdir"])
+    conda:
+        "/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/.conda/envs/Seurat"
+    shell:
+        """
+        if [[ "regularized_nca" =~ {wildcards.algo} ]]; then
+            Rscript {config[scriptdir]}/downstream_analysis/Seurat_clustering.R \
+            {input.P} \
+            {input.gt_celltype} \
+            {config[tflist]} \
+            $'\\t' \
+            T \
+            {output.outstat}
+        else
+            Rscript {config[scriptdir]}/downstream_analysis/Seurat_clustering.R \
+            {input.P} \
+            {input.gt_celltype} \
+            {config[tflist]} \
+            ' ' \
+            F \
+            {output.outstat}
+        fi
+        """
+
+rule collect_clust_accurarcy:
+    input:
+        expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/downstream_analysis/clust_stats.txt", outdir=config["outdir"], \
+        algo=algos, edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, top_e=top_edges)
+    output:
+        expand("{outdir}/analysis/clustering_stats.txt", outdir=config["outdir"])
+    params:
+        stat_path=[config["outdir"]+ '/'+alg + '/*/*/*/*/*/downstream_analysis/clust_stats.txt' for alg in algos]
+    shell: # note: modify below to include more algorithms
+        """
+        awk 'BEGIN{{OFS="\\t"}}NR==1{{$1=$1; printf "file_name\\t%s\\n", $0}}FNR==2{{printf "%s\\t",  FILENAME}} FNR>1{{print}}' {params.stat_path} | \
+        awk -F'\\t' -v regex_pattern='{config[outdir]}/([^/]+|baselines/[^/]+)/(0.[0-9]+)/(k[0-9]+)/([^/]+)/(rep[0-9]+)/([^/]+)_stability/downstream_analysis'  'BEGIN{{OFS="\\t"}} NR==1{{printf "algo\\tedge_addition_prob\\tlda_topics\\tcell\\tTFA_rep\\texp_dropout\\t"; 
+            for (i=2; i<NF; i++) printf $i "\\t"; print $NF }}NR>1{{
+            $1=$1; 
+            match($1, regex_pattern, arr);
+            printf "%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t", arr[1], arr[2], arr[3], arr[4], arr[5], arr[6];
+            for (i=2; i<NF; i++) printf $i "\\t"; print $NF 
+        }}' > {output}
+        """

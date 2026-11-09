@@ -1,0 +1,7 @@
+#Child	Parent	Prob_of_gaining_edge P(e_child=1|e_parent=0)	Prob_of_maintaining_edge P(e_child=1|e_parent=1)
+Sbay	right	0	0.4
+Cgla	right	0	0.4
+Anc2	right	0	0.4
+Calb	right	0	0.4
+Spom	right	0	0.4
+Anc5	right	0	0.4

@@ -1,0 +1,7 @@
+#Child	Parent	Prob_of_gaining_edge P(e_child=1|e_parent=0)	Prob_of_maintaining_edge P(e_child=1|e_parent=1)
+Scer	Calb	0.2	0.8
+Sbay	Calb	0.2	0.8
+Klac	Cgla	0.2	0.8
+Calb	Sjap	0.2	0.8
+Cgla	Sjap	0.2	0.8
+Sjap	Spom	0.2	0.8

@@ -1,0 +1,90 @@
+
+executable = /mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/simulation/072024_cell_lineage_formulation_w_lda_noise/scripts/downstream_network_inference/scMTNI/run_scMTNI.sh
+
+arguments = "$(subsamp) $(og) testdata_ogids.txt 0.2 AllGenes$(og).txt 50 -4 1"
+
+## Condor's console output
+log = /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/GRN_outputs/algos/scMTNI/$(algo)/processed_Buenrostro_Hematopoiesis/logs/4_1_$(subsamp)_$(og)_scMTNI.log
+
+## scMTNI's console output
+output = /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/GRN_outputs/algos/scMTNI/$(algo)/processed_Buenrostro_Hematopoiesis/logs/4_1_$(subsamp)_$(og)_scMTNI.out
+
+## Condor's error messages
+error = /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/GRN_outputs/algos/scMTNI/$(algo)/processed_Buenrostro_Hematopoiesis/logs/4_1_$(subsamp)_$(og)_scMTNI.err
+
+## Initidir directory for results
+initialdir=/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/GRN_outputs/algos/scMTNI/$(algo)/processed_Buenrostro_Hematopoiesis/4_1
+## Input/output files
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+
+match_list_length = 5
+requirements = (TARGET.Name =!= LastMatchName1) &&(OpSysMajorVer>=7)
+
+## If multiple machines match the requirements of a job, choose
+## the machine with the best floating point performance
+Rank=kflops
+
+# periodic_release = (JobStatus == 5) && (HoldReasonCode == 34) && (NumJobStarts <= 5)
+
+transfer_input_files = /mnt/dv/wid/projects2/Roy-regnet-inference/CVN/CVNvrConstraint_SingleCellwSparsitywMotif_upto1transition/CVN,\
+                                         /mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/brand_multiome_project/scMTNI_with_TFA/gsl/libgsl.tar.gz,\
+					   /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/prior.tar.gz,\
+					   /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/subsample/$(subsamp)/cluster1.table,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster1_allregulators.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster1_allGenes.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/subsample/$(subsamp)/cluster2.table,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster2_allregulators.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster2_allGenes.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/subsample/$(subsamp)/cluster3.table,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster3_allregulators.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster3_allGenes.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/subsample/$(subsamp)/cluster6.table,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster6_allregulators.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster6_allGenes.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/subsample/$(subsamp)/cluster9.table,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster9_allregulators.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster9_allGenes.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/subsample/$(subsamp)/cluster7.table,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster7_allregulators.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster7_allGenes.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/subsample/$(subsamp)/cluster8.table,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster8_allregulators.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster8_allGenes.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/subsample/$(subsamp)/cluster10.table,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster10_allregulators.txt,\
+						/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/cluster10_allGenes.txt,\
+					   /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/TFs_OGs.txt,\
+					   /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/ogids/AllGenes$(og).txt,\
+					   /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/testdata_ogids.txt,\
+					   /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/processed_Buenrostro_Hematopoiesis/inputdata/scMTNI/data/$(algo)/condor_config.txt,\
+					   /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/Buenrostro_Hematopoiesis/inputdata/celltype_order.txt,\
+					   /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/Buenrostro_Hematopoiesis/inputdata/celltype_tree_ancestor.txt\
+
+transfer_output_files = output_$(subsamp)_$(og).tar.gz
+transfer_output_remaps = "output_$(subsamp)_$(og).tar.gz=/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/GRN_outputs/algos/scMTNI/$(algo)/processed_Buenrostro_Hematopoiesis/4_1/output_$(subsamp)_$(og).tar.gz"
+
+## Resource requirements
+universe = vanilla
+request_cpus = 1
+
+## The memory requirement per job.
+## Condor also accepts decimal numbers like 1.2GB.
+request_memory = ifthenelse(MemoryUsage =!= undefined, (MAX({8000, MemoryUsage* 3/2})), 8000)
+Requirements = (Machine != "roy-exec-9.discovery.wisc.edu" && Machine != "roy-exec-11.discovery.wisc.edu" )
+
+## The disk requirement per job.
+## Condor also accepts decimal numbers like 1.6GB.
+## request_disk = 800MB
+request_disk = 1800MB
+
+## Other settings
+# Notification            = never
+# +WantGlidein            = false
+# +WantFlocking           = true
++group                  = "WID"
+# +is_resumable           = false
+JobBatchName            = "scMTNI_TFA_processed_Buenrostro_Hematopoiesis_4_1"
+
+## Run one job for each pair of (TFA_inference_algo, subsample_ID, orthogroup_ID)
+queue algo,subsamp,og from /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/scMTNI_queue_args/Buenrostro_Hematopoiesis.txt

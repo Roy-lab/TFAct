@@ -1,0 +1,67 @@
+
+# a column file where each line is the name of a regulator. This specifies the order of tfs in prior network.
+tflist: ../speciesspecsim_sz/testinput/tflist.txt # need absolute path
+
+# contains 0.[0-9]+/${cell_type}/genes.txt, a column file where each line is the name of a gene. This specifies the order of genes in prior network and output expression.
+# note that 0.[0-9]+ is edge adding probability, and ${cell_type} is prefix name.
+# it also contains 0.[0-9]+/${cell_type}/nw.tsv for the ground truth network (2-column)
+genedir: /mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/simulation/072024_cell_lineage_formulation_w_lda_noise/testoutput
+
+# contains 0.[0-9]+/k[0-9]+/${cell_type}_prior.txt and  where k[0-9]+ is LDA topic number
+datadir: /mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/simulation/072024_cell_lineage_formulation_w_lda_noise/inputtoTFA
+
+outdir: /mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/simulation/072024_cell_lineage_formulation_w_lda_noise/TFA_output
+
+
+scriptdir: ../../../scripts # absolute path to the scripts directory.
+
+### here are algorithms hyperparamters
+algo:
+  ibpg:
+    max_iter: 300
+    init_m: random
+    k_1: 10
+    k_2: 10
+    l_reg_graph: 3
+    l_tgt_graph: 3
+    l: 10
+  ibpg_2f: # 2 factor IBPG nmf with prior
+    max_iter: 600
+    init_m: nndsvd
+    l: 500
+    lambda_p: 0.1
+  ibpg_2fct: # 2 factor IBPG nmf with prior
+    max_iter: 600
+    init_m: nndsvd
+    l: 500
+    lambda_p: 0.1
+    lambda_Cminus: 0.1
+    lambda_E: 100
+  kl_nmf_2fct: # 2 factor KL nmf with prior
+    max_iter: 500
+    init_m: random # note: don't use the current version of nndsvd. It will produce initialization with inflated 0s
+    l: 500
+    lambda_p: 0.1
+    lambda_Cminus: 0.1
+    lambda_E: 100
+  hals_prior: # 2 factor hals nmf with prior
+    max_iter: 300
+    init_m: nndsvd # the relative loss could be very high if initialized randomly 
+    l: 10
+  nmqf_hals: # 4 factor with hals update rule and prior on ||Penalty \circ UV^T||_1
+    max_iter: 300
+    init_m: nndsvd # the relative loss could be very high if initialized randomly
+    l: 1 # should be smaller as it is not in the proximal term, or the approximation may not fit well
+    k_1: 10
+    k_2: 10
+  pmf_grn:
+    # where you git clone https://github.com/nyu-dl/pmf-grn
+    dir_path: /mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/benchmarking_tfa_algorithms/algorithms/pmf-grn
+    num_hyper_search_epoch: 3000 # currently also used for the full prior run
+    possible_A_stds: [0.1, 0.2, 0.3, 0.4, 0.5, 1, 2, 4]
+    possible_U_stds: [2, 5, 10]
+    possible_annealing_factors: [1, 10]
+    num_experiments: 10 # for hyperparamter search
+    num_full_epoch: 3000
+  regularized_nca:
+    l: 0.1

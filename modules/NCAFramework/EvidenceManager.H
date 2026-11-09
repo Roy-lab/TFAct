@@ -25,6 +25,7 @@ class EvidenceManager
 
 		//This associates the variable information with the variable id
 		int setVariableManager(VariableManager*);
+		void skipfirstline();
 		
 		//Read the evidence file
 		Error::ErrorCode loadEvidenceFromFile_Continuous(const char*);
@@ -52,6 +53,8 @@ class EvidenceManager
 		map<string, Matrix*> dataMats;
 
 		vector<string> allcell;
+
+		bool skip_firstline;
 };
 
 #endif //_EVIDENCE_MANAGER

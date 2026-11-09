@@ -1,0 +1,623 @@
+configfile:"config.yml"
+
+import numpy as np
+import glob
+import os
+
+
+num_random_init=20
+
+####
+# Begin: dataset specifics
+####
+# FBS reprogramming
+FBS_clusters = ["cluster1","cluster2","cluster3","cluster4","cluster5","cluster7","cluster8"]
+
+# Buenrostro_Hematopoiesis 
+BH_clusters = ["cluster1","cluster2","cluster3","cluster6","cluster7","cluster8", "cluster9", "cluster10"]
+
+# Ranzoni_fetal_hematopoiesis/coarse_tree
+RFH_fine_clusters = ["B-cells","Erythroid-cells","GPs","Granulocytes","HSC-MPPs","LMPs","Mast-cells","Megakaryocytes","MEMPs","Monocytes","pDCs"]
+
+ds_cluster_map = {"processed_FBS_reprogramming": FBS_clusters, "processed_Buenrostro_Hematopoiesis": BH_clusters, "processed_Ranzoni_fetal_hematopoiesis_fine_tree": RFH_fine_clusters}
+
+mouse_gold_standards = ['mESC_chipunion_KDUnion_intersect', 'mESC_KDUnion', 'mESC_chipunion']
+
+# human. Work for both ds.
+BH_gold_standards = ['Cus_KO_0.01_Cus_ChIP_2_intersect.gs_network', 'Cus_ChIP_2.gs_network', 'Cus_KO_0.01.gs_network', 'Cus_KO_0.01_union_intersect.gs_network', 'UniBind.gs_network']
+
+top_edges=[500, 1000, 2000] # for f scores 
+
+predictable_TF_tops=[10000]
+
+# algos need to be specified to calculate Fscores
+## FastNCA is not used as it requires the number of observations to exceed the number of tfs.
+# algos=['baselines/hals_prior', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg', 'FastNCA', 'NINCA_quad', 'pmf_grn', 'regularized_nca', 'BITFAM', 'TIGER', 'NetREX_CF', 'supirfactor_shallow', 'supirfactor_hierarchical', 'ibpg_2f', 'ibpg_2fct']
+# algos=['HALS-p', 'ibpg', 'NINCA_quad', 'pmf_grn', 'regularized_nca', 'TIGER', 'NetREX_CF', 'supirfactor_shallow', 'supirfactor_hierarchical', 'ibpg_2f', 'ibpg_2fct']
+algos=['kl_nmf_2fct','HALS-p', 'ibpg', 'NINCA_quad', 'TIGER', 'NetREX_CF', 'supirfactor_shallow', 'supirfactor_hierarchical', 'ibpg_2fct', 'regularized_nca']
+# stability_algos=['ibpg_2f', 'ibpg_2fct', 'baselines/hals_prior', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg'] # a subset
+# stability_algos=['ibpg_2f', 'ibpg_2fct', 'kl_nmf_2fct', 'baselines/hals_prior', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg'] # a subset
+stability_algos=['kl_nmf_2fct', 'ibpg_2fct', 'HALS-p', 'ibpg', 'regularized_nca'] # a subset
+
+
+# the below may add up to stability_algos
+# gene_by_tf_A_algos=['ibpg_2f', 'ibpg_2fct', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg', 'FastNCA', 'NINCA_quad', 'pmf_grn'] # algorithms that infer a gene-by-tf GRN matrix
+gene_by_tf_A_algos=['kl_nmf_2fct','ibpg_2f', 'ibpg_2fct', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg', 'NINCA_quad', 'pmf_grn'] # algorithms that infer a gene-by-tf GRN matrix
+tf_by_gene_A_algos=['HALS-p'] # algorithms that infer a tf-by-gene GRN matrix
+edge_lst_A_algos=['regularized_nca'] # return a 3 column edge file
+
+###
+## To better fit the prior
+###
+l1_choices = [2000]
+l_edges_choices = [1000, 100]
+other_l1_l_edges_combo = ['ibpg_2fct_100_1000', 'kl_nmf_2fct_2000_1000']
+# rr_algos = ['kl_nmf_2fct', 'ibpg_2fct']
+rr_algos = ['ibpg_2fct']
+
+stability_algos += [str(a)+"_"+str(b)+"_"+str(c) for a in rr_algos for b in l1_choices for c in l_edges_choices] + other_l1_l_edges_combo
+algos += [str(a)+"_"+str(b)+"_"+str(c) for a in rr_algos for b in l1_choices for c in l_edges_choices] + other_l1_l_edges_combo
+gene_by_tf_A_algos += [str(a)+"_"+str(b)+"_"+str(c) for a in rr_algos for b in l1_choices for c in l_edges_choices] + other_l1_l_edges_combo
+
+## other algorithms different hyperparameters
+algos += ['NetREX_CF' + _ for _ in ['', '_1', '_90']] # '' default to 60. Possible weights from https://github.com/EJIUB/NetREX_CF/blob/main/Notebook/NetREXCF_S2Cell.ipynb
+
+algos += ['TIGER_2_2_1_1_10', 'TIGER_1_1_2_2_10', 'TIGER_1_1_1_1_5']
+
+include: "rules/pmf_grn.smk" # included here such that variables defined above will be accessible
+include: "rules/FastNCA.smk"
+include: "rules/NINCA.smk" 
+include: "rules/regularized_nca.smk"
+include: "rules/BITFAM.smk"
+include: "rules/TIGER.smk"
+include: "rules/NetREX_CF.smk"
+include: "rules/supirfactor.smk"
+include: "rules/IBPG_2FCT.smk"
+include: "rules/KL_NMF_2fct.smk"
+include: "rules/RFH_rerun.smk"
+include: "rules/collect_summary_stats.smk"
+include: "rules/collect_prior_stats.smk"
+
+rule all:
+    input:
+        ####
+        ## part 0: create input files
+        ####
+        expand("{datadir}/processed_FBS_reprogramming/inputdata/{c}_cell_names.txt", datadir=config["datadir"], c=FBS_clusters),
+        expand("{datadir}/processed_FBS_reprogramming/inputdata/allregulators.txt", datadir=config["datadir"]),
+
+        expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/{c}_cell_names.txt", datadir=config["datadir"], c=BH_clusters),
+        expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/allregulators.txt", datadir=config["datadir"]),
+
+        expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/{c}_cell_names.txt", datadir=config["datadir"], c=RFH_fine_clusters),
+        expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/allregulators.txt", datadir=config["datadir"]),
+
+        # ####
+        # # Part 1: Running algorithms
+        # ####
+        # # regularized nca
+        # expand("{outdir}/regularized_nca/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/{stability_rep}/adj.txt", outdir=config["outdir"], \
+        #     edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, stability_rep = ["rep_"+str(_) for _ in range(num_random_init)]),
+        # expand("{outdir}/regularized_nca/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/adj_filelist.txt", outdir=config["outdir"], \
+        #     edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        # expand("{outdir}/regularized_nca/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/P.txt", outdir=config["outdir"], \
+        #     edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        # 2 factor hals with prior
+        expand("{outdir}/HALS-p/processed_FBS_reprogramming/{c}/rep_0/A.txt", outdir=config["outdir"], c = FBS_clusters),
+        expand("{outdir}/HALS-p/processed_Buenrostro_Hematopoiesis/{c}/rep_0/A.txt", outdir=config["outdir"], c = BH_clusters),
+        expand("{outdir}/HALS-p/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/rep_0/A.txt", outdir=config["outdir"], c = RFH_fine_clusters),
+
+        # 2 factor ibpg, cell type specific (TFAct-F)
+        expand("{outdir}/ibpg_2fct/processed_FBS_reprogramming/{c}/rep_0/A.txt", outdir=config["outdir"], c = FBS_clusters),
+        expand("{outdir}/ibpg_2fct/processed_Buenrostro_Hematopoiesis/{c}/rep_0/A.txt", outdir=config["outdir"], c = BH_clusters),
+        expand("{outdir}/ibpg_2fct/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/rep_0/A.txt", outdir=config["outdir"], c = RFH_fine_clusters),
+        
+        # # 2 factor nmf, cell type specific (TFAct-KL)
+        # expand("{outdir}/kl_nmf_2fct/processed_FBS_reprogramming/{c}/rep_0/A.txt", outdir=config["outdir"], c = FBS_clusters),
+        # expand("{outdir}/kl_nmf_2fct/processed_Buenrostro_Hematopoiesis/{c}/rep_0/A.txt", outdir=config["outdir"], c = BH_clusters),
+        # expand("{outdir}/kl_nmf_2fct/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/rep_0/A.txt", outdir=config["outdir"], c = RFH_fine_clusters),
+
+
+        # ibpg + graph regularization + prior on ||Penalty \circ UV^T||_1
+        expand("{outdir}/ibpg/processed_FBS_reprogramming/{c}/rep_0/A.txt", outdir=config["outdir"], c = FBS_clusters),
+        expand("{outdir}/ibpg/processed_Buenrostro_Hematopoiesis/{c}/rep_0/A.txt", outdir=config["outdir"], c = BH_clusters),
+        expand("{outdir}/ibpg/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/rep_0/A.txt", outdir=config["outdir"], c = RFH_fine_clusters),
+
+        # # cell type specific TFA inference
+        expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/all_exps/all_priors.txt", datadir=config["datadir"]),
+
+        # # ibpg + prior on ||Penalty \circ UV^T||_1
+        # expand("{outdir}/ibpg_wogr/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        # edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # # ibpg without regularization
+        # expand("{outdir}/ibpg_noreg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        # edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # # nmqf + prior on ||Penalty \circ UV^T||_1
+        # expand("{outdir}/nmqf_hals/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        # edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # # nmqf without regularization
+        # expand("{outdir}/nmqf_hals_noreg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/rep_0/A.txt", outdir=config["outdir"], \
+        # edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # ### existing algorithms, start
+        # # 1. pmf_grn
+        # # here obtain the best hyperparamters
+        # expand("{outdir}/pmf_grn/experiments/hpsearch/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/{fold_num}/hyperparams_used.txt", \
+        #     outdir=config["outdir"],edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, \
+        #     fold_num=[_ for _ in range(config["algo"]["pmf_grn"]["num_experiments"])]),
+
+        # expand("{outdir}/pmf_grn/experiments/hpsearch/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/hp_results.txt", outdir=config["outdir"],\
+        #     edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        # # full prior run
+        # expand("{outdir}/pmf_grn/experiments/full_prior/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/best_iter.params", outdir=config["outdir"],\
+        #     edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        
+        # # consensus
+        # expand("{outdir}/pmf_grn/processed_FBS_reprogramming/{c}/inferred_consensus_tfa.tsv", outdir=config["outdir"], c =FBS_clusters),
+        # expand("{outdir}/pmf_grn/processed_Buenrostro_Hematopoiesis/{c}/inferred_consensus_tfa.tsv", outdir=config["outdir"], c =BH_clusters),
+        # expand("{outdir}/pmf_grn/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/inferred_consensus_tfa.tsv", outdir=config["outdir"], c =RFH_fine_clusters),
+
+        # # # 2. FastNCA
+        # expand("{outdir}/FastNCA/processed_FBS_reprogramming/{c}/A.txt", outdir=config["outdir"], c = FBS_clusters),
+        # expand("{outdir}/FastNCA/processed_Buenrostro_Hematopoiesis/{c}/A.txt", outdir=config["outdir"], c = BH_clusters),
+        # expand("{outdir}/FastNCA/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/A.txt", outdir=config["outdir"], c = RFH_fine_clusters),
+        
+        # # 3. NINCA_lp, NINCA_quad
+        expand("{outdir}/NINCA_quad/processed_FBS_reprogramming/{c}/A.txt", outdir=config["outdir"], c = FBS_clusters),
+        expand("{outdir}/NINCA_quad/processed_Buenrostro_Hematopoiesis/{c}/A.txt", outdir=config["outdir"], c = BH_clusters),
+        expand("{outdir}/NINCA_quad/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/A.txt", outdir=config["outdir"], c = RFH_fine_clusters),
+        # expand("{outdir}/NINCA_quad/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/A.txt", outdir=config["outdir"],\
+        #     edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+        # # expand("{outdir}/NINCA_lp/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}/A.txt", outdir=config["outdir"],\
+        # #     edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout),
+
+        # # 4. BITFAM
+        # expand("{outdir}/BITFAM/processed_FBS_reprogramming/{c}/A.txt", outdir=config["outdir"], c = FBS_clusters),
+        # expand("{outdir}/BITFAM/processed_Buenrostro_Hematopoiesis/{c}/A.txt", outdir=config["outdir"], c = BH_clusters),
+        # expand("{outdir}/BITFAM/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/A.txt", outdir=config["outdir"], c = RFH_fine_clusters),
+        
+        # # 5. TIGER
+        expand("{outdir}/{TIGER_setting}/processed_FBS_reprogramming/{c}/A.txt", outdir=config["outdir"], c = FBS_clusters, TIGER_setting=['TIGER', 'TIGER_2_2_1_1_10', 'TIGER_1_1_2_2_10', 'TIGER_1_1_1_1_5']), # TIGER default to 1 1 1 1 10
+        expand("{outdir}/{TIGER_setting}/processed_Buenrostro_Hematopoiesis/{c}/A.txt", outdir=config["outdir"], c = BH_clusters, TIGER_setting=['TIGER', 'TIGER_2_2_1_1_10', 'TIGER_1_1_2_2_10', 'TIGER_1_1_1_1_5']),
+        expand("{outdir}/{TIGER_setting}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/A.txt", outdir=config["outdir"], c = RFH_fine_clusters, TIGER_setting=['TIGER', 'TIGER_2_2_1_1_10', 'TIGER_1_1_2_2_10', 'TIGER_1_1_1_1_5']),
+        
+        # # 6. NetREX_CF
+        expand("{outdir}/NetREX_CF{weight_suffix}/processed_FBS_reprogramming/{c}/A.txt", outdir=config["outdir"], c = FBS_clusters, weight_suffix = ['', '_1', '_90']),
+        expand("{outdir}/NetREX_CF{weight_suffix}/processed_Buenrostro_Hematopoiesis/{c}/A.txt", outdir=config["outdir"], c = BH_clusters, weight_suffix = ['', '_1', '_90']),
+        expand("{outdir}/NetREX_CF{weight_suffix}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/A.txt", outdir=config["outdir"], c = RFH_fine_clusters, weight_suffix = ['', '_1', '_90']),
+        
+        # # 7. supirfactor
+        expand("{outdir}/supirfactor_shallow/processed_FBS_reprogramming/{c}/A.txt", outdir=config["outdir"], c = FBS_clusters),
+        expand("{outdir}/supirfactor_shallow/processed_Buenrostro_Hematopoiesis/{c}/A.txt", outdir=config["outdir"], c = BH_clusters),
+        expand("{outdir}/supirfactor_shallow/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/A.txt", outdir=config["outdir"], c = RFH_fine_clusters),
+        
+        expand("{outdir}/supirfactor_hierarchical/processed_FBS_reprogramming/{c}/A.txt", outdir=config["outdir"], c = FBS_clusters),
+        expand("{outdir}/supirfactor_hierarchical/processed_Buenrostro_Hematopoiesis/{c}/A.txt", outdir=config["outdir"], c = BH_clusters),
+        expand("{outdir}/supirfactor_hierarchical/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}/A.txt", outdir=config["outdir"], c = RFH_fine_clusters),
+
+        # ### END existing algorithms
+
+        # ###
+        # # stability selection for all algorithms
+        # ###
+        expand("{outdir}/{algo}/processed_FBS_reprogramming/{c}_stability/A.txt", algo=stability_algos, outdir=config["outdir"], c = FBS_clusters),
+        expand("{outdir}/{algo}/processed_Buenrostro_Hematopoiesis/{c}_stability/A.txt", algo=stability_algos, outdir=config["outdir"], c = BH_clusters),
+        expand("{outdir}/{algo}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}_stability/A.txt", algo=stability_algos, outdir=config["outdir"], c = RFH_fine_clusters),
+
+        # ####
+        # # Part 2: Analysis
+        # ####
+        # expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/stats_{top_e}/tf_specifics.txt", outdir=config["outdir"], \
+        # edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, top_e=top_edges, algo=algos),
+        # # expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/stats_{top_e}/tf_specifics.txt", outdir=config["outdir"], \
+        # # edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, top_e=top_edges, algo=gene_by_tf_A_algos),
+        # # expand("{outdir}/{algo}/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}_stability/stats_{top_e}/tf_specifics.txt", outdir=config["outdir"], \
+        # # edgeprob=edge_adding_prob,ldak=lda_k,pre=prefixes,TFAsimrep=TFA_sim_rep, exp=exp_mat_w_dropout, top_e=top_edges, algo=edge_lst_A_algos),
+
+        # # Fscores (this recompiles whenever algos get changed, which is slow. We have scripts that directly get F scores from stat.txt)
+        # expand("{outdir}/processed_FBS_reprogramming/analysis/Fscores.txt", outdir=config["outdir"]),
+        # expand("{outdir}/processed_Buenrostro_Hematopoiesis/analysis/Fscores.txt", outdir=config["outdir"]),
+        # expand("{outdir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/analysis/Fscores.txt", outdir=config["outdir"]),
+        expand("{outdir}/{algo}/processed_FBS_reprogramming/{c}_stability/{gs}/stats_{top_e}/stat.txt", outdir=config["outdir"], \
+            algo=algos, c=FBS_clusters, gs=mouse_gold_standards, top_e=top_edges),
+        expand("{outdir}/{algo}/processed_Buenrostro_Hematopoiesis/{c}_stability/{gs}/stats_{top_e}/stat.txt", outdir=config["outdir"], \
+            algo=algos, c=BH_clusters, gs=BH_gold_standards, top_e=top_edges),
+        expand("{outdir}/{algo}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}_stability/{gs}/stats_{top_e}/stat.txt", outdir=config["outdir"], \
+            algo=algos, c=RFH_fine_clusters, gs=BH_gold_standards, top_e=top_edges),
+
+        # # AUPR
+        expand("{outdir}/{algo}/processed_FBS_reprogramming/{c}_stability/{gs}/stats_{top_e}/AUPR.txt", outdir=config["outdir"], c = FBS_clusters, gs = mouse_gold_standards, top_e = predictable_TF_tops, algo = algos + ['prior']),
+        expand("{outdir}/{algo}/processed_Buenrostro_Hematopoiesis/{c}_stability/{gs}/stats_{top_e}/AUPR.txt", outdir=config["outdir"], c = BH_clusters, gs = BH_gold_standards, top_e = predictable_TF_tops, algo = algos + ['prior']),
+        expand("{outdir}/{algo}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/{c}_stability/{gs}/stats_{top_e}/AUPR.txt", outdir=config["outdir"], c = RFH_fine_clusters, gs = BH_gold_standards, top_e = predictable_TF_tops, algo = algos + ['prior']),
+
+
+
+
+#####
+## Step 0: create input files
+#####
+rule FBS_reformatting_0:
+    params:
+        d=expand("{datadir}/FBS_reprogramming/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/FBS_reprogramming/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/FBS_reprogramming/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        d=expand("{datadir}/processed_FBS_reprogramming/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/processed_FBS_reprogramming/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/processed_FBS_reprogramming/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+        c=expand("{datadir}/processed_FBS_reprogramming/inputdata/{{c}}_cell_names.txt", datadir=config["datadir"]),
+    shell:
+        """
+        head -n 1 {params.d} | tr '\\t' '\\n' | tail -n +2 > {output.c}
+        tail -n +2 {params.d} | awk -F'\\t' -v cluster="_{wildcards.c}" -v OFS='\\t' '{{sub(cluster "$", "", $1); print}}' > {output.d}
+        sed 's/_{wildcards.c}$//g' {params.g} > {output.g}
+        awk -F'\\t' -v cluster="_{wildcards.c}" -v OFS='\\t' '{{sub(cluster "$", "", $1); sub(cluster "$", "", $2); print}}' {params.p} > {output.p}
+        rm {params.d} {params.g} {params.p}
+        """
+
+# make regulators list
+rule FBS_reformatting_1:
+    input:
+        p=expand("{datadir}/processed_FBS_reprogramming/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        r=expand("{datadir}/processed_FBS_reprogramming/inputdata/{{c}}_allregulators.txt", datadir=config["datadir"]),
+    shell:
+        """
+        cut -f1 {input.p} | sort -u > {output.r}
+        """
+
+rule FBS_reformatting_2:
+    input:
+        r=expand("{datadir}/processed_FBS_reprogramming/inputdata/{c}_allregulators.txt", datadir=config["datadir"], c=FBS_clusters),
+    output:
+        r=expand("{datadir}/processed_FBS_reprogramming/inputdata/allregulators.txt", datadir=config["datadir"]),
+    shell:
+        """
+        cat {input.r} | sort -u > {output.r}
+        """
+
+
+rule BH_reformatting_0:
+    params:
+        d=expand("{datadir}/Buenrostro_Hematopoiesis/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/Buenrostro_Hematopoiesis/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/Buenrostro_Hematopoiesis/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        d=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+        c=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/{{c}}_cell_names.txt", datadir=config["datadir"]),
+    shell:
+        """
+        head -n 1 {params.d} | tr '\\t' '\\n' | tail -n +2 > {output.c}
+        tail -n +2 {params.d} | awk -F'\\t' -v cluster="_{wildcards.c}" -v OFS='\\t' '{{sub(cluster "$", "", $1); print}}' > {output.d}
+        sed 's/_{wildcards.c}$//g' {params.g} > {output.g}
+        awk -F'\\t' -v cluster="_{wildcards.c}" -v OFS='\\t' '{{sub(cluster "$", "", $1); sub(cluster "$", "", $2); print}}' {params.p} > {output.p}
+        rm {params.d} {params.g} {params.p}
+        """
+
+# make regulators list
+rule BH_reformatting_1:
+    input:
+        p=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        r=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/{{c}}_allregulators.txt", datadir=config["datadir"]),
+    shell:
+        """
+        cut -f1 {input.p} | sort -u > {output.r}
+        """
+
+rule BH_reformatting_2:
+    input:
+        r=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/{c}_allregulators.txt", datadir=config["datadir"], c=BH_clusters),
+    output:
+        r=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/allregulators.txt", datadir=config["datadir"]),
+    shell:
+        """
+        cat {input.r} | sort -u > {output.r}
+        """
+
+rule RFH_reformatting_0:
+    params:
+        d=expand("{datadir}/Ranzoni_fetal_hematopoiesis/fine_tree/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/Ranzoni_fetal_hematopoiesis/fine_tree/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/Ranzoni_fetal_hematopoiesis/fine_tree/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        d=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+        c=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/{{c}}_cell_names.txt", datadir=config["datadir"]),
+    shell:
+        """
+        head -n 1 {params.d} | tr '\\t' '\\n' | tail -n +2 > {output.c}
+        tail -n +2 {params.d} | awk -F'\\t' -v cluster="_{wildcards.c}" -v OFS='\\t' '{{sub(cluster "$", "", $1); print}}' > {output.d}
+        sed 's/_{wildcards.c}$//g' {params.g} > {output.g}
+        awk -F'\\t' -v cluster="_{wildcards.c}" -v OFS='\\t' '{{sub(cluster "$", "", $1); sub(cluster "$", "", $2); print}}' {params.p} > {output.p}
+        rm {params.d} {params.g} {params.p}
+        """
+
+# make regulators list
+rule RFH_reformatting_1:
+    input:
+        p=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        r=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/{{c}}_allregulators.txt", datadir=config["datadir"]),
+    shell:
+        """
+        cut -f1 {input.p} | sort -u > {output.r}
+        """
+
+rule RFH_reformatting_2:
+    input:
+        r=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/{c}_allregulators.txt", datadir=config["datadir"], c=RFH_fine_clusters),
+    output:
+        r=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/allregulators.txt", datadir=config["datadir"]),
+    shell:
+        """
+        cat {input.r} | sort -u > {output.r}
+        """
+
+### make cell type specific inputs
+rule TFA_2fct_reformat_lineage_tree:
+    input:
+        FBS=expand("{datadir}/FBS_reprogramming/inputdata/celltype_tree_ancestor.txt", datadir=config["datadir"]),
+        BH=expand("{datadir}/Buenrostro_Hematopoiesis/inputdata/celltype_tree_ancestor.txt", datadir=config["datadir"]),
+        RFH=expand("{datadir}/Ranzoni_fetal_hematopoiesis/fine_tree/inputdata/celltype_tree_ancestor.txt", datadir=config["datadir"]),
+    output:
+        FBS=expand("{datadir}/processed_FBS_reprogramming/inputdata/all_exps/celltype_tree_ancestor.txt", datadir=config["datadir"]),
+        BH=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/all_exps/celltype_tree_ancestor.txt", datadir=config["datadir"]),
+        RFH=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/all_exps/celltype_tree_ancestor.txt", datadir=config["datadir"]),
+    shell:
+        """
+        awk '{{printf "%s\\t%s\\t%s\\n", $1, $2, 1}}' {input.FBS} > {output.FBS}
+        awk '{{printf "%s\\t%s\\t%s\\n", $1, $2, 1}}' {input.BH} > {output.BH}
+        awk '{{printf "%s\\t%s\\t%s\\n", $1, $2, 1}}' {input.RFH} > {output.RFH}
+        """
+
+# doesn't worth parallelizing 
+rule TFA_2fct_make_input:
+    input:
+        FBS_cell_types=expand("{datadir}/FBS_reprogramming/inputdata/celltype_order.txt", datadir=config["datadir"]),
+        BH_cell_types=expand("{datadir}/Buenrostro_Hematopoiesis/inputdata/celltype_order.txt", datadir=config["datadir"]),
+        RFH_cell_types=expand("{datadir}/Ranzoni_fetal_hematopoiesis/fine_tree/inputdata/celltype_order.txt", datadir=config["datadir"]),
+        dummy_1=expand("{datadir}/processed_FBS_reprogramming/inputdata/allregulators.txt", datadir=config["datadir"]),
+        dummy_2=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/allregulators.txt", datadir=config["datadir"]),
+        dummy_3=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/allregulators.txt", datadir=config["datadir"]),
+    output:
+        fbs_d=expand("{datadir}/processed_FBS_reprogramming/inputdata/all_exps/all_exps.txt", datadir=config["datadir"]),
+        fbs_g=expand("{datadir}/processed_FBS_reprogramming/inputdata/all_exps/all_genes.txt", datadir=config["datadir"]),
+        fbs_p=expand("{datadir}/processed_FBS_reprogramming/inputdata/all_exps/all_priors.txt", datadir=config["datadir"]),
+        bh_d=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/all_exps/all_exps.txt", datadir=config["datadir"]),
+        bh_g=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/all_exps/all_genes.txt", datadir=config["datadir"]),
+        bh_p=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/all_exps/all_priors.txt", datadir=config["datadir"]),
+        rfh_d=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/all_exps/all_exps.txt", datadir=config["datadir"]),
+        rfh_g=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/all_exps/all_genes.txt", datadir=config["datadir"]),
+        rfh_p=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/all_exps/all_priors.txt", datadir=config["datadir"]),
+    params:
+        FBS_in_dir=expand("{datadir}/processed_FBS_reprogramming/inputdata", datadir=config["datadir"]), 
+        BH_in_dir=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata", datadir=config["datadir"]), 
+        RFH_in_dir=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata", datadir=config["datadir"]), 
+        fbs_out_dir=expand("{datadir}/processed_FBS_reprogramming/inputdata/all_exps", datadir=config["datadir"]),
+        bh_out_dir=expand("{datadir}/processed_Buenrostro_Hematopoiesis/inputdata/all_exps", datadir=config["datadir"]),
+        rfh_out_dir=expand("{datadir}/processed_Ranzoni_fetal_hematopoiesis_fine_tree/inputdata/all_exps", datadir=config["datadir"]),
+    shell:
+        """
+        bash {config[scriptdir]}/IBPG_2FCT/make_inputs_v3.sh {params.FBS_in_dir} {params.fbs_out_dir} {input.FBS_cell_types}
+        bash {config[scriptdir]}/IBPG_2FCT/make_inputs_v3.sh {params.BH_in_dir} {params.bh_out_dir} {input.BH_cell_types}
+        bash {config[scriptdir]}/IBPG_2FCT/make_inputs_v3.sh {params.RFH_in_dir} {params.rfh_out_dir} {input.RFH_cell_types}
+        """
+
+rule FBS_move_gold_standards: # not used
+    input:
+        FBS_gs=expand("{datadir}/FBS_reprogramming/inputdata/celltype_order.txt", datadir=config["datadir"]),
+
+# #####
+# ## Step 1: run all algorithms
+# #####
+
+rule run_hals_prior_TFA_inference:
+    input:
+        r=expand("{datadir}/{{dataset}}/inputdata/{{c}}_allregulators.txt", datadir=config["datadir"]),
+        d=expand("{datadir}/{{dataset}}/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/{{dataset}}/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/{{dataset}}/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/HALS-p/{{dataset}}/{{c}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/HALS-p/{{dataset}}/{{c}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/HALS-p/{{dataset}}/{{c}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/HALS-p/{{dataset}}/{{c}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/HALS-p/{dataset}/{c}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][hals_prior][max_iter]} --init_m {config[algo][hals_prior][init_m]} \
+        --num_rep {params.num_rep} -t hals_prior -l {config[algo][hals_prior][l]}
+        """
+
+rule run_ibpg_2f_TFA_inference:
+    input:
+        r=expand("{datadir}/{{dataset}}/inputdata/{{c}}_allregulators.txt", datadir=config["datadir"]),
+        d=expand("{datadir}/{{dataset}}/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/{{dataset}}/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/{{dataset}}/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/ibpg_2f/{{dataset}}/{{c}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/ibpg_2f/{{dataset}}/{{c}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/ibpg_2f/{{dataset}}/{{c}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/ibpg_2f/{{dataset}}/{{c}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/ibpg_2f/{dataset}/{c}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][ibpg_2f][max_iter]} --init_m {config[algo][ibpg_2f][init_m]} \
+        --num_rep {params.num_rep} -t ibpg_2f -l {config[algo][ibpg_2f][l]} --lambda_p {config[algo][ibpg_2f][lambda_p]}
+        """
+
+rule run_ibpg_TFA_inference:
+    input:
+        r=expand("{datadir}/{{dataset}}/inputdata/{{c}}_allregulators.txt", datadir=config["datadir"]),
+        d=expand("{datadir}/{{dataset}}/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/{{dataset}}/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/{{dataset}}/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/ibpg/{{dataset}}/{{c}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/ibpg/{{dataset}}/{{c}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/ibpg/{{dataset}}/{{c}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/ibpg/{{dataset}}/{{c}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/ibpg/{dataset}/{c}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][ibpg][max_iter]} --init_m {config[algo][ibpg][init_m]} \
+        --num_rep {params.num_rep} -t ibpg -l {config[algo][ibpg][l]} \
+        --k_1 {config[algo][ibpg][k_1]} --k_2 {config[algo][ibpg][k_2]} \
+        --l_reg_graph {config[algo][ibpg][l_reg_graph]} --l_tgt_graph {config[algo][ibpg][l_tgt_graph]}
+        """
+
+# rule run_ibpg_wogr_TFA_inference: # without graph regularization
+#     input:
+#         r = config["tflist"],
+#         d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+#         g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+#         p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+#     output:
+#         out_A=expand("{outdir}/ibpg_wogr/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+#         out_P=expand("{outdir}/ibpg_wogr/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+#         out_rel=expand("{outdir}/ibpg_wogr/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+#         outdir=directory(expand("{outdir}/ibpg_wogr/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+#     params:
+#         exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+#         num_rep=num_random_init
+#     threads: 10
+#     benchmark: 
+#         "benchmarks/ibpg_wogr/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+#     shell:
+#         """
+#         {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+#         --max_iter {config[algo][ibpg][max_iter]} --init_m {config[algo][ibpg][init_m]} \
+#         --num_rep {params.num_rep} -t ibpg -l {config[algo][ibpg][l]} \
+#         --k_1 {config[algo][ibpg][k_1]} --k_2 {config[algo][ibpg][k_2]} \
+#         --l_reg_graph 0 --l_tgt_graph 0
+#         """
+
+# rule run_ibpg_noreg_inference:
+#     input:
+#         r = config["tflist"],
+#         d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+#         g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+#         p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+#     output:
+#         out_A=expand("{outdir}/ibpg_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+#         out_P=expand("{outdir}/ibpg_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+#         out_rel=expand("{outdir}/ibpg_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+#         outdir=directory(expand("{outdir}/ibpg_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+#     params:
+#         exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+#         num_rep=num_random_init
+#     threads: 10
+#     benchmark: 
+#         "benchmarks/ibpg_noreg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+#     shell:
+#         """
+#         {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+#         --max_iter {config[algo][ibpg][max_iter]} --init_m {config[algo][ibpg][init_m]} \
+#         --num_rep {params.num_rep} -t ibpg -l 0 \
+#         --k_1 {config[algo][ibpg][k_1]} --k_2 {config[algo][ibpg][k_2]} \
+#         --l_reg_graph 0 --l_tgt_graph 0
+#         """
+
+
+
+# rule run_nmqf_hals_TFA_inference: # nmqf with hals update rule with prior on ||Prior \circ UV^T||_1. Note that graph reg not applicable for nonseparability
+#     input:
+#         r = config["tflist"],
+#         d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+#         g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+#         p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+#     output:
+#         out_A=expand("{outdir}/nmqf_hals/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+#         out_P=expand("{outdir}/nmqf_hals/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+#         out_rel=expand("{outdir}/nmqf_hals/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+#         outdir=directory(expand("{outdir}/nmqf_hals/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+#     params:
+#         exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+#         num_rep=num_random_init
+#     threads: 10
+#     benchmark: 
+#         "benchmarks/nmqf_hals/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+#     shell:
+#         """
+#         {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+#         --max_iter {config[algo][nmqf_hals][max_iter]} --init_m {config[algo][nmqf_hals][init_m]} \
+#         --num_rep {params.num_rep} -t nmqf -l {config[algo][nmqf_hals][l]} \
+#         --k_1 {config[algo][nmqf_hals][k_1]} --k_2 {config[algo][nmqf_hals][k_2]} \
+#         --l_reg_graph 0 --l_tgt_graph 0
+#         """
+
+# rule run_nmqf_hals_noreg_TFA_inference: # nmqf with hals update rule with prior on ||Prior \circ UV^T||_1. Note that graph reg not applicable for nonseparability
+#     input:
+#         r = config["tflist"],
+#         d=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}.txt", datadir=config["datadir"]),
+#         g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+#         p=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+#     output:
+#         out_A=expand("{outdir}/nmqf_hals_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/A.txt", outdir=config["outdir"]),
+#         out_P=expand("{outdir}/nmqf_hals_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/P.txt", outdir=config["outdir"]),
+#         out_rel=expand("{outdir}/nmqf_hals_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+#         outdir=directory(expand("{outdir}/nmqf_hals_noreg/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}", outdir=config["outdir"]))
+#     params:
+#         exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+#         num_rep=num_random_init
+#     threads: 10
+#     benchmark: 
+#         "benchmarks/nmqf_hals_noreg/{edgeprob}/{ldak}/{pre}/{TFAsimrep}/{exp}.benchmark.txt"
+#     shell:
+#         """
+#         {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+#         --max_iter {config[algo][nmqf_hals][max_iter]} --init_m {config[algo][nmqf_hals][init_m]} \
+#         --num_rep {params.num_rep} -t nmqf -l 0 \
+#         --k_1 {config[algo][nmqf_hals][k_1]} --k_2 {config[algo][nmqf_hals][k_2]} \
+#         --l_reg_graph 0 --l_tgt_graph 0
+#         """
+
+# ######
+# ## Step 2: stability selection. Note that this is not the same as subsampling then taking the mean: it just addresses NMF's instability over different initializations
+# ######
+rule stability_selection_get_mean:
+    input:
+        rel=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        in_A=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}/rep_0/A.txt", outdir=config["outdir"]),
+        in_P=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}/rep_0/P.txt", outdir=config["outdir"])
+    output:
+        out_A=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}_stability/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}_stability/P.txt", outdir=config["outdir"])
+    params:
+        indir_suffix="{algo}/{dataset}/{c}",
+        output_precision = 7,
+        file_pattern_A = "rep_*/A.txt",
+        file_pattern_P = "rep_*/P.txt",
+        frac_ignored= 0.25
+    shell:
+        """
+        python {config[scriptdir]}/get_stability_selection_mean.py --A_file_pattern '{config[outdir]}/{params.indir_suffix}/{params.file_pattern_A}' \
+        --P_file_pattern '{config[outdir]}/{params.indir_suffix}/{params.file_pattern_P}' --frac_ignored {params.frac_ignored} \
+        --output_precision {params.output_precision} --out_A {output.out_A} --out_P {output.out_P}
+        """

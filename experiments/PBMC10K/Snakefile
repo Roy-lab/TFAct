@@ -1,0 +1,152 @@
+configfile:"config.yml"
+
+import numpy as np
+import glob
+import os
+
+num_random_init=10
+
+datasets=["PBMC_ct"]
+
+cell_clusters = ["CD4_Naive", "CD4_TCM", "CD8_Naive", "CD16_Mono", \
+    "NK", "Treg", "CD14_Mono", "cDC", "CD8_TEM_1", "Intermediate_B", "Memory_B", \
+    "Plasma", "CD4_TEM", "MAIT", "Naive_B", "CD8_TEM_2", "pDC", "gdT", "HSPC"]
+
+algos=['ibpg', 'HALS-p', 'NINCA_quad', 'TIGER', 'NetREX_CF', 'supirfactor_shallow', 'supirfactor_hierarchical', 'ibpg_2fct', 'ibpg_2fct_500_1000', 'ibpg_2fct_500_0']
+# stability_algos=['ibpg_2f', 'ibpg_2fct', 'baselines/hals_prior', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg'] # a subset
+# stability_algos=['ibpg_2f', 'ibpg_2fct', 'kl_nmf_2fct', 'baselines/hals_prior', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg'] # a subset
+stability_algos=['ibpg_2fct', 'HALS-p', 'ibpg','ibpg_2fct_500_1000','ibpg_2fct_500_0', 'kl_nmf_2fct_500_0', 'kl_nmf_2fct'] # a subset
+
+
+# the below may add up to stability_algos
+# gene_by_tf_A_algos=['ibpg_2f', 'ibpg_2fct', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg', 'FastNCA', 'NINCA_quad', 'pmf_grn'] # algorithms that infer a gene-by-tf GRN matrix
+gene_by_tf_A_algos=['kl_nmf_2fct_500_0', 'kl_nmf_2fct','ibpg_2f', 'ibpg_2fct', 'ibpg', 'ibpg_wogr', 'ibpg_noreg', 'nmqf_hals', 'nmqf_hals_noreg', 'NINCA_quad', 'pmf_grn'] # algorithms that infer a gene-by-tf GRN matrix
+tf_by_gene_A_algos=['HALS-p'] # algorithms that infer a tf-by-gene GRN matrix
+edge_lst_A_algos=['regularized_nca'] # return a 3 column edge file
+
+# include: "rules/pmf_grn.smk" # 
+# include: "rules/FastNCA.smk" # need nca condition
+include: "rules/NINCA.smk"
+include: "rules/regularized_nca.smk"
+# include: "rules/BITFAM.smk" # need scaling down genes
+include: "rules/TIGER.smk"
+include: "rules/NetREX_CF.smk"
+include: "rules/supirfactor.smk"
+include: "rules/IBPG_2FCT.smk"
+include: "rules/KL_NMF_2fct.smk"
+# include: "rules/RFH_rerun.smk"
+
+rule all:
+    input:
+         # 2 factor hals with prior
+        expand("{outdir}/HALS-p/{dataset}/{c}/rep_0/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+
+        # 2 factor ibpg, cell type specific
+        expand("{outdir}/ibpg_2fct/{dataset}/{c}/rep_0/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+        expand("{outdir}/ibpg_2fct_500_1000/{dataset}/{c}/rep_0/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+        expand("{outdir}/ibpg_2fct_500_0/{dataset}/{c}/rep_0/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+
+        
+        # # ibpg + graph regularization + prior on ||Penalty \circ UV^T||_1
+        # expand("{outdir}/ibpg/{dataset}/{c}/rep_0/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+
+        # NINCA_lp, NINCA_quad
+        expand("{outdir}/NINCA_quad/{dataset}/{c}/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+
+         # TIGER
+        expand("{outdir}/TIGER/{dataset}/{c}/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+
+         # NetREX_CF
+        expand("{outdir}/NetREX_CF/{dataset}/{c}/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+        
+        # supirfactor
+        expand("{outdir}/supirfactor_shallow/{dataset}/{c}/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+
+        expand("{outdir}/supirfactor_hierarchical/{dataset}/{c}/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+
+        # regularized NCA
+        expand("{outdir}/regularized_nca/{dataset}/{c}_stability/A.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+        expand("{outdir}/regularized_nca/{dataset}/{c}_stability/P.txt", outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+
+        # ### END existing algorithms
+
+        # ###
+        # # stability selection for all algorithms
+        # ###
+        expand("{outdir}/{algo}/{dataset}/{c}_stability/A.txt", algo=stability_algos, outdir=config["outdir"], c = cell_clusters, dataset=datasets),
+
+
+# data normalized
+rule run_hals_prior_TFA_inference:
+    input:
+        r=expand("{datadir}/{{dataset}}/all_regulators.txt", datadir=config["datadir"]),
+        d=expand("{datadir}/{{dataset}}/normalized_{{c}}_exp.txt", datadir=config["datadir"]),
+        g=expand("{datadir}/{{dataset}}/all_genes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/{{dataset}}/pbmc10k_prior.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/HALS-p/{{dataset}}/{{c}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/HALS-p/{{dataset}}/{{c}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/HALS-p/{{dataset}}/{{c}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/HALS-p/{{dataset}}/{{c}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/HALS-p/{dataset}/{c}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][hals_prior][max_iter]} --init_m {config[algo][hals_prior][init_m]} \
+        --num_rep {params.num_rep} -t hals_prior -l {config[algo][hals_prior][l]}
+        """
+
+rule run_ibpg_TFA_inference:
+    input:
+        r=expand("{datadir}/{{dataset}}/all_regulators.txt", datadir=config["datadir"]),
+        d=expand("{datadir}/{{dataset}}/normalized_{{c}}_exp.txt", datadir=config["datadir"]),
+        g=expand("{datadir}/{{dataset}}/all_genes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/{{dataset}}/pbmc10k_prior.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/ibpg/{{dataset}}/{{c}}/rep_0/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/ibpg/{{dataset}}/{{c}}/rep_0/P.txt", outdir=config["outdir"]),
+        out_rel=expand("{outdir}/ibpg/{{dataset}}/{{c}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        outdir=directory(expand("{outdir}/ibpg/{{dataset}}/{{c}}", outdir=config["outdir"]))
+    params:
+        exe="/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/IBPG/tetraNMF",
+        num_rep=num_random_init
+    threads: 10
+    benchmark: 
+        "benchmarks/ibpg/{dataset}/{c}.benchmark.txt"
+    shell:
+        """
+        {params.exe} -d {input.d} -r {input.r} -g {input.g} -p {input.p} -o {output.outdir} \
+        --max_iter {config[algo][ibpg][max_iter]} --init_m {config[algo][ibpg][init_m]} \
+        --num_rep {params.num_rep} -t ibpg -l {config[algo][ibpg][l]} \
+        --k_1 {config[algo][ibpg][k_1]} --k_2 {config[algo][ibpg][k_2]} \
+        --l_reg_graph {config[algo][ibpg][l_reg_graph]} --l_tgt_graph {config[algo][ibpg][l_tgt_graph]}
+        """
+
+# ######
+# ## Step 2: stability selection. Note that this is not the same as subsampling then taking the mean: it just addresses NMF's instability over different initializations
+# ######
+rule stability_selection_get_mean:
+    input:
+        rel=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}/rep_0/relative_error.txt", outdir=config["outdir"]),
+        in_A=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}/rep_0/A.txt", outdir=config["outdir"]),
+        in_P=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}/rep_0/P.txt", outdir=config["outdir"])
+    output:
+        out_A=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}_stability/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/{{algo}}/{{dataset}}/{{c}}_stability/P.txt", outdir=config["outdir"])
+    params:
+        indir_suffix="{algo}/{dataset}/{c}",
+        output_precision = 7,
+        file_pattern_A = "rep_*/A.txt",
+        file_pattern_P = "rep_*/P.txt",
+        frac_ignored= 0.2
+    shell:
+        """
+        python {config[scriptdir]}/get_stability_selection_mean.py --A_file_pattern '{config[outdir]}/{params.indir_suffix}/{params.file_pattern_A}' \
+        --P_file_pattern '{config[outdir]}/{params.indir_suffix}/{params.file_pattern_P}' --frac_ignored {params.frac_ignored} \
+        --output_precision {params.output_precision} --out_A {output.out_A} --out_P {output.out_P}
+        """

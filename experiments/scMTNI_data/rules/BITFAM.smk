@@ -1,0 +1,70 @@
+
+
+## single threaded
+rule run_BITFAM_TFA_inference:
+    input:
+        r=expand("{datadir}/{{dataset}}/inputdata/{{c}}_allregulators.txt", datadir=config["datadir"]),
+        d=expand("{datadir}/{{dataset}}/inputdata/{{c}}.table", datadir=config["datadir"]),
+        g=expand("{datadir}/{{dataset}}/inputdata/{{c}}_allGenes.txt", datadir=config["datadir"]),
+        p=expand("{datadir}/{{dataset}}/inputdata/{{c}}_network.txt", datadir=config["datadir"]),
+    output:
+        out_A=expand("{outdir}/BITFAM/{{dataset}}/{{c}}/A.txt", outdir=config["outdir"]),
+        out_P=expand("{outdir}/BITFAM/{{dataset}}/{{c}}/P.txt", outdir=config["outdir"])
+    benchmark:
+        "benchmarks/BITFAM/{dataset}/{c}.benchmark.txt"
+    threads: 2 # to be comparable to other algos
+    conda:
+        "/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/benchmarking_tfa_algorithms/algorithms/BITFAM"
+    shell:
+        """
+        Rscript {config[scriptdir]}/BITFAM/BITFAM_v2.R {input.d} {input.r} {input.p} {output.out_A} {output.out_P}
+        """
+
+# rule BITFAM_get_summary_stat:
+#     input:
+#         A=expand("{outdir}/BITFAM/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/A.txt", outdir=config["outdir"]),
+#         P=expand("{outdir}/BITFAM/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/P.txt", outdir=config["outdir"]),
+#         prior=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}_prior.txt", datadir=config["datadir"]),
+#         true_P=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/P.txt", datadir=config["datadir"]),
+#         g=expand("{genedir}/{{edgeprob}}/{{pre}}/genes.txt", genedir=config['genedir']),
+#     output:
+#         expand("{outdir}/BITFAM/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/stats_{{top_e}}/tf_specifics.txt", outdir=config["outdir"]),
+#         expand("{outdir}/BITFAM/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/stats_{{top_e}}/stat.txt", outdir=config["outdir"])
+#     conda:
+#         "/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/.conda/envs/scanpy" # TODO change this
+#     params:
+#         outdir=expand("{outdir}/BITFAM/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/stats_{{top_e}}", outdir=config["outdir"])
+#     shell:
+#         """
+#         python {config[scriptdir]}/compare_networks_and_TFA.py \
+#         --outdir {params.outdir} \
+#         --inferred_A {input.A}  \
+#         --inferred_P {input.P} \
+#         --true_A {config[genedir]}/{wildcards.edgeprob}/{wildcards.pre}/nw.tsv \
+#         --prior_A {input.prior} \
+#         --true_P {input.true_P} \
+#         --tf_lst {config[tflist]} \
+#         --gene {input.g} \
+#         --top {wildcards.top_e} \
+#         --transpose_inferred_A \
+#         --not_scaling_inferred_A # similarly, as the data are transformed before fitting.
+#         """
+
+# rule BITFAM_get_clustering_accurarcy:
+#     input: 
+#         P=expand("{outdir}/BITFAM/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}/P.txt", outdir=config["outdir"]),
+#         gt_celltype=expand("{datadir}/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/cell_celltype_assignments.txt", datadir=config["datadir"]),
+#     output:
+#         outstat=expand("{outdir}/BITFAM/{{edgeprob}}/{{ldak}}/{{pre}}/{{TFAsimrep}}/{{exp}}_stability/downstream_analysis/clust_stats.txt", outdir=config["outdir"])
+#     conda:
+#         "/mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/.conda/envs/Seurat"
+#     shell:
+#         """
+#         Rscript {config[scriptdir]}/downstream_analysis/Seurat_clustering.R \
+#         {input.P} \
+#         {input.gt_celltype} \
+#         {config[tflist]} \
+#         $'\\t' \
+#         F \
+#         {output.outstat}
+#         """

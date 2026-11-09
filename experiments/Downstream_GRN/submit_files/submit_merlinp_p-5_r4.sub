@@ -1,0 +1,65 @@
+
+executable = run_merlinp_condor.sh
+
+arguments = "$(subsamp) $(clust) 5 -5 4 $(dataset) $(algo) $(ds_action)"
+
+## Condor's console output
+log = /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/logs/merlinp_5_-5_4/$(dataset)_$(algo)_$(ds_action)_$(subsamp)_$(clust).log
+
+## scMTNI's console output
+output = /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/logs/merlinp_5_-5_4/$(dataset)_$(algo)_$(ds_action)_$(subsamp)_$(clust).out
+
+## Condor's error messages
+error = /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/logs/merlinp_5_-5_4/$(dataset)_$(algo)_$(ds_action)_$(subsamp)_$(clust).err
+
+## Initidir directory for results
+initialdir=/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/results/merlinp_5_-5_4
+## Input/output files
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT_OR_EVICT
+
+match_list_length = 5
+requirements = (TARGET.Name =!= LastMatchName1) &&(OpSysMajorVer>=7)
+
+## If multiple machines match the requirements of a job, choose
+## the machine with the best floating point performance
+Rank=kflops
+
+# periodic_release = (JobStatus == 5) && (HoldReasonCode == 34) && (NumJobStarts <= 5)
+
+
+transfer_input_files = /mnt/dv/wid/projects5/Roy-singlecell/netinf_algo_comparison/bin/MERLIN/merlin-p_self_checkpoint/merlin,\
+		     /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/$(dataset)/inputdata/subsamples/$(clust)/TFA_algo_$(ds_action)/$(algo)/$(subsamp).txt,\
+		     /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/$(dataset)/inputdata/$(clust)_complete_allregulators_TFA.txt,\
+		     /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/real_dat_validation/scMTNI_data/scMTNI_sourcedata/$(dataset)/inputdata/$(clust)_network_TFA.txt,\
+		     /mnt/dv/wid/projects7/Roy-singlecell2/yuda_work/estimate_tfa/brand_multiome_project/scMTNI_with_TFA/gsl/libgsl.tar.gz\
+
+
+transfer_output_files = output_$(dataset)_$(subsamp)_$(clust)_$(algo)_TFA$(ds_action).tar.gz
+transfer_output_remaps = "output_$(dataset)_$(subsamp)_$(clust)_$(algo)_TFA$(ds_action).tar.gz=/mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/results/merlinp_5_-5_4/output_$(dataset)_$(subsamp)_$(clust)_$(algo)_TFA$(ds_action).tar.gz"
+
+## Resource requirements
+universe = vanilla
+request_cpus = 1
+
+## The memory requirement per job.
+## Condor also accepts decimal numbers like 1.2GB.
+request_memory = ifthenelse(MemoryUsage =!= undefined, (MAX({24000, MemoryUsage* 3/2})), 24000)
+
+Requirements = (Machine != "roy-exec-9.discovery.wisc.edu" && Machine != "roy-exec-11.discovery.wisc.edu" )
+
+## The disk requirement per job.
+## Condor also accepts decimal numbers like 1.6GB.
+## request_disk = 800MB
+request_disk = 2000MB
+
+## Other settings
+# Notification            = never
+# +WantGlidein            = false
++WantFlocking           = true
++group                  = "WID"
++is_resumable           = true
+JobBatchName            = "merlinp_5_-5_4"
+
+## Run one job for each pair of (subsample_ID, orthogroup_ID)
+queue dataset,subsamp,clust,algo,ds_action from /mnt/dv/wid/projects6/Roy-singlecell3/yuda_work/TFA_estimation/GRN_inference_w_TFA/queue_args.txt
